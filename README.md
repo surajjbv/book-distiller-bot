@@ -1,6 +1,6 @@
-# Book Distiller
+# book-distiller-bot
 
-Drop a PDF or EPUB into the **input folder** and double-click `run-now.command`. Book Distiller splits each new book into chapters, has **Qwen3.8‑27B** (running locally in
+Drop a PDF or EPUB into the **input folder** and double-click `run-now.command`. book-distiller-bot splits each new book into chapters, has **Qwen3.8‑27B** (running locally in
 LM Studio) take structured notes on each one, checks every quote against the book, writes and audits a book-level
 summary, and renders one HTML file into the **output folder**. Books whose summary is already in the output folder are
 skipped, so a run only converts what is new. Nothing leaves your Mac except through your own Drive sync.
@@ -22,7 +22,7 @@ Needs macOS, Python 3.9+, LM Studio (Bionic.app) with its `lms` CLI, and the mod
 
 ```bash
 lms get https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit
-cd ~/Code/book-distiller
+cd ~/Code/book-distiller-bot
 ./run.sh preflight      # first run creates .venv; checks LM Studio, the model, memory and the folders
 ```
 

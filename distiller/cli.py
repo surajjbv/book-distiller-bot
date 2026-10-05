@@ -95,7 +95,7 @@ def process(path: Path, cfg: dict, llm: LMStudio, out: Path, force: bool = False
         write_json(INDEX_PATH, index)
         if cfg.get("notify", True):
             parts = len(res["pages"])
-            notify("Book Distiller", f"Summary ready: {res['title']} ({res['read_minutes']} min"
+            notify("book-distiller-bot", f"Summary ready: {res['title']} ({res['read_minutes']} min"
                                      + (f", {parts} parts)" if parts > 1 else ")"))
     except ModelBusy:
         raise
@@ -103,7 +103,7 @@ def process(path: Path, cfg: dict, llm: LMStudio, out: Path, force: bool = False
         log.error("✗ %s failed: %s", path.name, e)
         log.debug("traceback", exc_info=True)
         if cfg.get("notify", True):
-            notify("Book Distiller", f"Failed: {path.name}")
+            notify("book-distiller-bot", f"Failed: {path.name}")
         raise
     finally:
         remove_log(handler)
@@ -183,7 +183,7 @@ def single_instance() -> None:
     try:
         pid = int(LOCK_PATH.read_text())
         os.kill(pid, 0)
-        log.error("Another Book Distiller run is in progress (pid %d). Wait for it, or stop it first.", pid)
+        log.error("Another book-distiller-bot run is in progress (pid %d). Wait for it, or stop it first.", pid)
         sys.exit(1)
     except (FileNotFoundError, ValueError, ProcessLookupError):
         pass  # no lock, or a stale one from a crash

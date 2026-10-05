@@ -110,7 +110,7 @@ class LMStudio:
         self.ctx = PROFILE["context"]
         self.lms = self._find_lms()
         self.identifier = None  # set while we hold a lease and the model is loaded
-        self.lease = LEASE_DIR / f"book-distiller.{os.getpid()}"
+        self.lease = LEASE_DIR / f"book-distiller-bot.{os.getpid()}"
         self._lock = threading.Lock()
         self.calls = self.valid_first = self.tokens = 0
         self.seconds = 0.0

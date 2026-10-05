@@ -1,5 +1,5 @@
 {
-  "_comment": "Book Distiller settings. Paths are relative to this folder unless absolute. The model's load profile (context 16384, 2 parallel requests, TTL 600 s) is shared with the other bots and fixed in distiller/llm.py.",
+  "_comment": "book-distiller-bot settings. Paths are relative to this folder unless absolute. The model's load profile (context 16384, 2 parallel requests, TTL 600 s) is shared with the other bots and fixed in distiller/llm.py.",
   "endpoint": "http://localhost:1234/v1",
   "lms_path": null,
   "model": "qwen3.8-27b-mlx",

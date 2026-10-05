@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Book Distiller entry point. See README.md.
+# book-distiller-bot entry point. See README.md.
 set -euo pipefail
 cd "$(dirname "$0")"
 if [ ! -x .venv/bin/python ]; then

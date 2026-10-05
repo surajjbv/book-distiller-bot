@@ -1,1 +1,1 @@
-"""Book Distiller: local-LLM book summaries."""
+"""book-distiller-bot: local-LLM book summaries."""
