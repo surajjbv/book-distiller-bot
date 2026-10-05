@@ -1,5 +1,5 @@
-"""The lease protocol (~/Code/botkit/PROTOCOL.md) with real processes against a fake `lms`, and config validation.
-Run with  .venv/bin/python -m unittest discover tests"""
+"""The lease protocol (as in the Node bots' kit.js) with real processes against a fake `lms` (written to a temp
+folder below), and config validation. Run with  .venv/bin/python -m unittest discover tests"""
 import json
 import os
 import subprocess
@@ -12,6 +12,36 @@ from pathlib import Path
 from distiller.util import DistillerError, load_config
 
 HERE = Path(__file__).parent
+FAKE_LMS = '''#!/usr/bin/env python3
+"""Stand-in for LM Studio's `lms` CLI for the lease tests; state (models, loads, unloads, fit) in $FAKE_LMS_STATE."""
+import json
+import os
+import sys
+import time
+
+path = os.environ["FAKE_LMS_STATE"]
+s = json.load(open(path))
+a = sys.argv[1:]
+opt = lambda k: a[a.index(k) + 1]
+if a[0] == "ps":
+    print(json.dumps(s["models"]))
+elif a[0] == "load" and "--estimate-only" in a:
+    print("This model will fail to load" if s.get("fit") is False else "This model may be loaded")
+elif a[0] == "load":
+    time.sleep(0.3)
+    s["models"].append({"type": "llm", "modelKey": a[1], "identifier": opt("--identifier"), "contextLength": int(opt("--context-length")),
+                        "status": "idle", "lastUsedTime": time.time() * 1000})
+    s["loads"] = s.get("loads", 0) + 1
+elif a[0] == "unload":
+    if not any(m["identifier"] == a[1] for m in s["models"]):
+        print(f"not loaded: {a[1]}")
+        sys.exit(1)
+    s["models"] = [m for m in s["models"] if m["identifier"] != a[1]]
+    s["unloads"] = s.get("unloads", 0) + 1
+tmp = f"{path}.{os.getpid()}"
+json.dump(s, open(tmp, "w"))
+os.replace(tmp, path)
+'''
 WORKER = """
 import sys, time
 from distiller.llm import LMStudio, ModelBusy
@@ -32,6 +62,9 @@ class LeaseTests(unittest.TestCase):
         self.state = self.tmp / "lms.json"
         self.env = {**os.environ, "FAKE_LMS_STATE": str(self.state), "LLM_LEASE_DIR": str(self.tmp / "leases"), "PYTHONWARNINGS": "ignore"}
         self.write({"models": [], "loads": 0, "unloads": 0})
+        self.lms = self.tmp / "fake_lms.py"
+        self.lms.write_text(FAKE_LMS)
+        self.lms.chmod(0o755)
 
     def write(self, s):
         self.state.write_text(json.dumps(s))
@@ -40,7 +73,7 @@ class LeaseTests(unittest.TestCase):
         return json.loads(self.state.read_text())
 
     def worker(self, delay, hold):
-        return subprocess.Popen([sys.executable, "-c", WORKER, str(HERE / "fake_lms.py"), str(delay), str(hold)],
+        return subprocess.Popen([sys.executable, "-c", WORKER, str(self.lms), str(delay), str(hold)],
                                 env=self.env, cwd=HERE.parent, stdout=subprocess.PIPE, text=True)
 
     def leases(self):

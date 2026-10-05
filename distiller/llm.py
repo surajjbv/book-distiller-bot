@@ -50,7 +50,7 @@ def tidy(obj):
     return obj
 
 
-# The model and the lease protocol shared with the Node bots (spec: ~/Code/botkit/PROTOCOL.md, Node: kit/llm.js).
+# The model and the lease protocol shared with the Node bots (the same as kit.js in the Node bots).
 # Every app loads the same profile, so whoever needs the model reuses what another one loaded.
 PROFILE = {"identifier": "qwen3.8-27b-mlx", "context": 16384, "parallel": 2, "ttl": 600}
 LEASE_DIR = Path(os.environ.get("LLM_LEASE_DIR") or "~/.local/state/llm-lease").expanduser()

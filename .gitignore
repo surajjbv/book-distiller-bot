@@ -1,12 +1,10 @@
-# books, outputs, work files, venv
+# Local files: books in, summaries out, work in progress (with per-book logs), the virtualenv
 input/*
 !input/.gitkeep
 work/
 output/
-benchmark/*
-!benchmark/.gitkeep
+benchmark/
 .venv/
 __pycache__/
 *.pyc
 .DS_Store
-*.log

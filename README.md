@@ -11,7 +11,7 @@ input/book.pdf → chunk → plan → extract (2 at a time) → verify quotes �
                   └ TOC / nav → chapter headings → fixed 8K-token chunks                                + Drive/Book Summaries/
 ```
 
-## Setup
+## Setup (macOS, Python 3.9+, LM Studio with Qwen3.8 27B, Google Drive for Desktop)
 
 Needs macOS, Python 3.9+, LM Studio (Bionic.app) with its `lms` CLI, Google Drive for Desktop, and the model:
 
@@ -24,7 +24,7 @@ cd ~/Code/book-distiller
 The bot starts the LM Studio server if it is off (and never stops it). LM Studio's model loading guardrails stay on.
 
 **Sharing LM Studio.** The school reminder, PGRS and email bots use the same model, and all of them follow one lease
-protocol (`~/Code/botkit/PROTOCOL.md`; here in `distiller/llm.py`): everyone loads Qwen3.8 with the same profile
+protocol (`kit.js` in the Node bots; here `distiller/llm.py`): everyone loads Qwen3.8 with the same profile
 (`--context-length 16384 --parallel 2 --ttl 600`), so whoever needs it reuses what another one loaded, and the last
 one done unloads it. A model a person loaded is never unloaded. Another model that is busy is waited for ("Waiting
 for … to finish", up to 10 min); one left idle for `takeover_idle_minutes` (default 5) is unloaded. If the model
@@ -82,25 +82,31 @@ and `--from STEP` redoes one step and everything after it.
 | 10 | **Render** | Splits chapters into the planned parts (book order, similar length; Part 1 also holds the overview) and writes one HTML file per part in the RTI-dashboard style, with links between parts. The model never writes HTML. | `pipeline.py` → `render()`; `plan.py` → `split_parts()`; `templates/summary.html.j2` | the template |
 | 11 | **Save** | Writes `output/<Title> – Summary.html` (or `… (Part 1 of 3).html` …), copies to Drive → Book Summaries, moves superseded files from an earlier run to the Trash, sends a notification. | `cli.py` → `process()` | `drive_folder`, `drive_subfolder`, `notify` |
 
-**Model calls** go through `llm.py`: it makes sure Qwen3.8 (and only Qwen3.8) is loaded, waits for other apps
-using LM Studio, streams every response, and retries with a pause. Text calls use Qwen's own prompt format with
+**Model calls** go through `llm.py`: it takes Qwen3.8 through the lease protocol (shared with the other bots),
+streams every response, and retries with a pause. Text calls use Qwen's own prompt format with
 thinking switched off; figure checks use the chat endpoint because they send images.
 
 ## Files
 
 ```
-config.json   model, endpoint, chunk sizes, temperature, image cap, Drive override (validated on load)
-style.md      the voice of your summaries
-input/        drop books here                 output/   finished summaries
-work/<book>/  doc.json, chunks.json, plan.json, notes/, synthesis/, images/, verify.json, run.log
-distiller/    ingest, chunk, plan, extract, synth, images, render, pipeline, cli, llm, util
-templates/    summary.html.j2
-tests/        .venv/bin/python -m unittest discover tests   (offline, no model needed)
+distiller/        the run, one module per step: ingest → chunk → plan → extract → synth → images → render;
+                  pipeline (steps, resume), cli (commands, Drive copy), llm (model sharing, requests), util
+templates/        summary.html.j2 (the page layout)
+tests/            test_offline.py (chunking, quotes, rendering) · test_lease.py (model sharing, config)
+style.md          the voice of your summaries      config.json   settings (validated on load)
+run.sh            ./run.sh [book] [--force] [--from STEP] | watch | preflight (creates .venv on first run)
+run-now.command   double-click = ./run.sh           pii-check.sh  personal-data gate before a commit
+requirements.txt  Python packages
+input/            drop books here    output/  finished summaries    (both gitignored)
+work/<book>/      (gitignored) doc.json, chunks.json, plan.json, notes/, synthesis/, images/, verify.json, run.log
 ```
 
 `drive_folder` in `config.json` overrides Drive auto-detection (`~/Library/CloudStorage/GoogleDrive-*/My Drive`).
 
-## Troubleshooting
+## When something goes wrong
+
+A failed book shows a macOS notification. Details: `work/<book>/run.log` (every step, with the error). `.venv/bin/python -m unittest discover tests` checks the code without the model.
+
 
 - **Not enough free memory for qwen3.8-27b-mlx**: quit other apps (Chrome is usually the biggest) and run again.
   Don't relax the guardrail.
@@ -109,3 +115,7 @@ tests/        .venv/bin/python -m unittest discover tests   (offline, no model n
 - **No usable text layer**: the PDF is scanned. `brew install ocrmypdf`, then `ocrmypdf --skip-text in.pdf out.pdf`.
 - **Odd chapter splits**: check the chunk list at the top of `work/<book>/run.log`, tune `chunk_tokens` /
   `min_chunk_tokens`, then `--from chunk`.
+
+## License
+
+MIT
