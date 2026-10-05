@@ -5,10 +5,8 @@ LM Studio) take structured notes on each one, checks every quote against the boo
 summary, and renders one HTML file into the **output folder**. Books whose summary is already in the output folder are
 skipped, so a run only converts what is new. Nothing leaves your Mac except through your own Drive sync.
 
-| Folder | Path (`input_dir`, `output_dir` in `config.json`) |
-|---|---|
-| Input | `~/Books/Input/` |
-| Output | `~/Books/Summaries/` |
+Set your folders in `.env` (copy `.env.example`): `BOOKS_INPUT_DIR` and `BOOKS_OUTPUT_DIR`, e.g. folders inside your
+Google Drive. Without them, `input/` and `output/` in this project are used.
 
 ```
 Input/book.pdf → chunk → plan → extract (2 at a time) → verify quotes → synthesize + audit → figures → render (parts)
@@ -98,7 +96,7 @@ distiller/        the run, one module per step: ingest → chunk → plan → ex
                   pipeline (steps, resume), cli (commands, folders), llm (model sharing, requests), util
 templates/        summary.html.j2 (the page layout)
 tests/            test_offline.py (chunking, quotes, rendering) · test_lease.py (model sharing, config)
-style.md          the voice of your summaries      config.json   settings (validated on load)
+style.md          the voice of your summaries      config.json   settings (validated on load)   .env / .env.example  your input and output folders
 run.sh            ./run.sh [book] [--force] [--from STEP] | watch | preflight (creates .venv on first run)
 run-now.command   double-click = ./run.sh           pii-check.sh  personal-data gate before a commit
 requirements.txt  Python packages

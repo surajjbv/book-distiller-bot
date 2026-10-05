@@ -8,3 +8,8 @@ benchmark/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Personal values (only .env.example is committed)
+.env
+.env.*
+!.env.example

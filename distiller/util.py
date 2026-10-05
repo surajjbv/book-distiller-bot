@@ -42,8 +42,8 @@ DEFAULTS = {
     "image_candidates": 30,
     "min_image_px": 160,
     "quote_match_threshold": 90,
-    "input_dir": "input",  # books to summarise (PDF, EPUB)
-    "output_dir": "output",  # finished summaries; a book whose summary is here is skipped
+    "input_dir": "input",  # books to summarise (PDF, EPUB); BOOKS_INPUT_DIR in .env overrides
+    "output_dir": "output",  # finished summaries (a book whose summary is here is skipped); BOOKS_OUTPUT_DIR in .env
     "watch_interval": 30,
     "notify": True,
 }
@@ -72,7 +72,18 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
         raise DistillerError(f"{path.name}: " + "; ".join(problems))
     cfg = {**DEFAULTS, **{k: v for k, v in data.items() if not k.startswith("_")}}
     cfg.update(context_length=PROFILE["context"], parallel=PROFILE["parallel"])
+    # Your own folders are personal, so they live in .env (gitignored), not in config.json.
+    env = read_env(path.parent / ".env")
+    cfg.update({k: env[e] for k, e in (("input_dir", "BOOKS_INPUT_DIR"), ("output_dir", "BOOKS_OUTPUT_DIR")) if env.get(e)})
     return cfg
+
+
+def read_env(path: Path) -> dict:
+    """KEY=value lines of a .env file (no file: empty)."""
+    if not path.exists():
+        return {}
+    pairs = (line.split("=", 1) for line in path.read_text().splitlines() if re.match(r"\s*[A-Z][A-Z0-9_]*\s*=", line))
+    return {k.strip(): v.strip().strip('"').strip("'") for k, v in pairs}
 
 
 def read_style() -> str:
