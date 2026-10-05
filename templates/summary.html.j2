@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="generator" content="book-distiller">
+<title>{{ title }} – Summary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#F3F1FA;--card:#FFFFFF;--card2:#F7F5FC;--ink:#1B1B21;--muted:#5E5C68;--faint:#8A8894;--line:#E6E3F0;
+  --blue:#3A74E8;--blue-t:#DCE6FD;--teal:#2FC7B8;--teal-d:#0E8F84;--teal-t:#C9F4EE;--lav:#8E63CE;--lav-t:#EDE3FB;
+  --red:#C62D2D;--red-t:#FDE3E1;--peach:#B6531B;--peach-t:#FCE9DC;--green:#1E7B3D;--green-t:#D3F2D9;--grey-t:#ECEBF0;
+  --font:"Google Sans Flex","Google Sans","Figtree","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"Cascadia Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --bg:#141318;--card:#211F26;--card2:#1B1A20;--ink:#F2F0F7;--muted:#B4B1BE;--faint:#8F8C99;--line:#34313D;
+  --blue:#8AB0FF;--blue-t:#223257;--teal:#4FD9CA;--teal-d:#7FE8DC;--teal-t:#123B37;--lav:#C6A6F5;--lav-t:#35284A;
+  --red:#FF8F87;--red-t:#46201E;--peach:#FFB68A;--peach-t:#43291A;--green:#7ED99A;--green-t:#1C3A25;--grey-t:#2C2A33;}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --bg:#141318;--card:#211F26;--card2:#1B1A20;--ink:#F2F0F7;--muted:#B4B1BE;--faint:#8F8C99;--line:#34313D;
+  --blue:#8AB0FF;--blue-t:#223257;--teal:#4FD9CA;--teal-d:#7FE8DC;--teal-t:#123B37;--lav:#C6A6F5;--lav-t:#35284A;
+  --red:#FF8F87;--red-t:#46201E;--peach:#FFB68A;--peach-t:#43291A;--green:#7ED99A;--green-t:#1C3A25;--grey-t:#2C2A33;}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:76px;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--font);padding-inline:16px;padding-block:24px 64px}
+.wrap{max-width:1020px;margin:0 auto;display:grid;gap:20px}
+h1{font:600 34px/1.1 var(--font);margin:0;letter-spacing:-.01em}
+h2{font:600 22px/1.2 var(--font);margin:0}
+h3{font:600 18px/1.3 var(--font);margin:0}
+h4{font:600 13px/1.2 var(--font);color:var(--muted);margin:18px 0 8px;letter-spacing:.02em}
+p{margin:0 0 10px;max-width:74ch} ul{margin:0;padding-left:1.2em} li{margin:5px 0;max-width:74ch}
+a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+strong{font-weight:600}
+.muted{color:var(--muted)}
+.card{background:var(--card);border-radius:28px;padding:22px}
+.sec{display:grid;gap:14px;scroll-margin-top:76px}
+.sec>.sec-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:8px 4px 0}
+.sec-h .n{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+
+/* header */
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+header .kick{font-weight:600;color:var(--lav);font-size:14px}
+header p{margin:6px 0 0;max-width:62ch}
+.theme{display:flex;background:var(--card);border-radius:999px;padding:4px;gap:2px}
+.theme button{all:unset;cursor:pointer;width:38px;height:34px;border-radius:999px;display:grid;place-items:center;color:var(--muted)}
+.theme button svg{width:18px;height:18px}
+.theme button[aria-pressed="true"]{background:var(--ink);color:var(--card)}
+
+/* sticky pill nav */
+nav.tabs{position:sticky;top:0;z-index:5;margin:0 -16px;padding:10px 16px;background:var(--bg);display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs a{flex:none;padding:9px 16px;border-radius:999px;background:var(--card);color:var(--muted);font-weight:500;font-size:14px;white-space:nowrap}
+nav.tabs a:hover{text-decoration:none;color:var(--ink)}
+nav.tabs a.on{background:var(--ink);color:var(--card)}
+
+/* parts */
+nav.parts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+nav.parts a.part{padding:9px 16px;border-radius:999px;background:var(--lav-t);color:var(--lav);font-weight:600;font-size:14px}
+nav.parts a.part:hover{text-decoration:none;filter:brightness(.97)}
+nav.parts a.part.on{background:var(--lav);color:var(--card)}
+nav.parts a.part.next{margin-left:auto;background:var(--ink);color:var(--card)}
+
+/* hero tiles */
+.hero{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.tile{display:grid;grid-template-columns:48px 1fr;gap:12px;align-items:center;border-radius:28px;padding:14px 16px;background:var(--tb);color:var(--tc)}
+.ico{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--card);color:var(--tc)}
+.ico svg{width:22px;height:22px}
+.tile .k{font-weight:600;font-size:13.5px}
+.tile .v{font:500 30px/1.05 var(--font);font-variant-numeric:tabular-nums}
+.tile .v small{font-size:14px;font-weight:600;margin-left:4px}
+.t-blue{--tb:var(--blue-t);--tc:var(--blue)}.t-teal{--tb:var(--teal-t);--tc:var(--teal-d)}
+.t-lav{--tb:var(--lav-t);--tc:var(--lav)}.t-peach{--tb:var(--peach-t);--tc:var(--peach)}
+@media (max-width:820px){.hero{grid-template-columns:1fr 1fr}}
+@media (max-width:420px){.tile{grid-template-columns:40px 1fr;padding:12px}.ico{width:40px;height:40px}.tile .v{font-size:24px}}
+
+/* TL;DR + thesis */
+ol.tldr{list-style:none;margin:0;padding:0;display:grid;gap:10px;counter-reset:t}
+ol.tldr li{counter-increment:t;display:grid;grid-template-columns:32px 1fr;gap:12px;align-items:start;margin:0;font-size:16.5px}
+ol.tldr li::before{content:counter(t);width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--blue-t);color:var(--blue);font-weight:600;font-size:14px}
+.thesis{font-size:18px;line-height:1.6;margin:0}
+.themes{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.theme-card{background:var(--card2);border-radius:20px;padding:16px 18px;display:grid;gap:6px;align-content:start}
+.theme-card p{margin:0}
+
+/* pills & refs */
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{font-weight:600;font-size:12.5px;padding:4px 12px;border-radius:999px;background:var(--pb,var(--grey-t));color:var(--pc,var(--muted));white-space:nowrap}
+a.ref,.ref{display:inline-block;font-weight:600;font-size:12.5px;padding:3px 10px;border-radius:999px;background:var(--lav-t);color:var(--lav);margin:2px 4px 0 0;white-space:nowrap}
+a.ref:hover{text-decoration:none;filter:brightness(.96)}
+
+/* chapters */
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:7px 14px;border-radius:999px;background:var(--card);color:var(--muted);font-weight:500;font-size:13.5px}
+.chip:hover{text-decoration:none;color:var(--blue);background:var(--blue-t)}
+article.ch{background:var(--card);border-radius:28px;overflow:hidden;scroll-margin-top:76px}
+.ch-h{padding:20px 22px 4px;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-start}
+.ch-h .num{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--card);font-weight:600;font-variant-numeric:tabular-nums}
+.ch-h .grow{flex:1 1 300px;display:grid;gap:4px}
+.ch-b{padding:6px 22px 20px}
+.core{background:var(--teal-t);color:var(--ink);border-radius:20px;padding:12px 16px;margin:6px 0 12px;font-weight:500}
+.core b{color:var(--teal-d);font-weight:600;margin-right:6px}
+.fw{background:var(--card2);border-radius:20px;padding:12px 16px;margin:8px 0}
+.fw .t{font-weight:600;color:var(--blue)}
+.fw ol{margin:6px 0 0;padding-left:1.3em}
+ul.data{list-style:none;padding:0}
+ul.data li{padding-left:14px;border-left:3px solid var(--peach)}
+.story{margin:8px 0}
+.lesson{color:var(--green);font-weight:600}
+details.more{background:var(--card2);border-top:1px solid var(--line)}
+details.more summary{cursor:pointer;list-style:none;padding:14px 22px;font-weight:600;color:var(--blue);display:flex;gap:10px;align-items:center}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::after{content:"";width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin-top:-4px}
+details.more[open] summary::after{transform:rotate(-135deg);margin-top:4px}
+.more-b{padding:0 22px 20px}
+.more-b h4:first-child{margin-top:0}
+
+/* frameworks / stories */
+.grid{display:grid;gap:12px}
+@media (min-width:760px){.grid.two{grid-template-columns:1fr 1fr}}
+.fw-card{display:grid;gap:8px;align-content:start}
+.fw-card h3{color:var(--blue)}
+.fw-card p{margin:0}
+.apply{background:var(--blue-t);border-radius:20px;padding:12px 16px}
+.apply b{display:block;font-size:12.5px;color:var(--blue);margin-bottom:2px}
+.story-card{display:grid;gap:8px;align-content:start}
+.story-card p{margin:0}
+
+/* figures */
+figure{margin:0;display:grid;gap:10px}
+figure img{display:block;width:100%;height:auto;border-radius:20px;background:#fff}
+figcaption{color:var(--muted);font-size:14.5px}
+
+/* takeaways: step list */
+ol.steps{list-style:none;margin:0;padding:0;display:grid}
+ol.steps li{display:grid;grid-template-columns:32px 1fr;gap:0 14px;position:relative;padding-bottom:16px;margin:0;max-width:none}
+ol.steps li::before{content:"";position:absolute;left:14.5px;top:30px;bottom:2px;width:3px;border-radius:2px;background:var(--line)}
+ol.steps li:last-child::before{display:none}
+.node{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--teal-t);color:var(--teal-d);font-weight:600;font-size:14px;font-variant-numeric:tabular-nums}
+.st{display:grid;gap:2px;padding-top:4px}
+.st .why{color:var(--muted);font-size:14.5px}
+
+/* quotes */
+.quotes{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+blockquote{margin:0;background:var(--card2);border-radius:20px;padding:16px 18px;display:grid;gap:8px;align-content:space-between}
+blockquote p{margin:0;font-size:16.5px}
+blockquote .src{font-size:13px;color:var(--muted)}
+.ch-b blockquote{margin:6px 0}
+
+/* critique */
+.crit{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.crit .blk{border-radius:20px;padding:14px 16px;background:var(--tb);color:var(--ink)}
+.crit .blk h3{color:var(--tc);font-size:15px;margin-bottom:6px}
+.t-green{--tb:var(--green-t);--tc:var(--green)}.t-red{--tb:var(--red-t);--tc:var(--red)}
+
+/* cheat sheet */
+dl.cheat{margin:0;display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:0}
+dl.cheat dt,dl.cheat dd{padding:10px 0;border-bottom:1px solid var(--line)}
+dl.cheat dt{font-weight:600;color:var(--lav);padding-right:18px}
+dl.cheat dd{margin:0}
+dl.cheat dt:last-of-type,dl.cheat dd:last-of-type{border-bottom:0}
+@media (max-width:560px){dl.cheat{grid-template-columns:1fr}dl.cheat dt{border-bottom:0;padding-bottom:0}}
+
+footer{color:var(--muted);font-size:13px;display:grid;gap:6px;padding:0 6px}
+footer summary{cursor:pointer;color:var(--blue);font-weight:600}
+footer ul{margin-top:6px}
+@media (max-width:760px){h1{font-size:28px}.card{padding:18px}.ch-h,.ch-b{padding-left:18px;padding-right:18px}}
+@media print{
+  body{background:#fff;padding:0} nav.tabs,.theme{display:none!important}
+  .card,article.ch{break-inside:avoid;border:1px solid #ddd}
+  details.more{display:block} details.more>*{display:block}
+  #cheat-sheet{break-before:page}
+}
+</style>
+<script>
+(function(){try{var t=localStorage.getItem("bd-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})();
+</script>
+</head>
+<body>
+{% set n_frameworks = frameworks | length %}
+{% macro part_nav(next=False) %}
+<nav class="parts" aria-label="Parts">
+  {% for p in nav %}<a class="part{% if p.current %} on{% endif %}" href="{{ p.href }}"{% if p.current %} aria-current="page"{% endif %}>Part {{ p.n }}</a>{% endfor %}
+  {% if next and part < parts %}<a class="part next" href="{{ nav[part].href }}">Continue: Part {{ part + 1 }} →</a>{% endif %}
+</nav>
+{% endmacro %}
+<div class="wrap">
+  <header>
+    <div>
+      <div class="kick">Book summary{% if parts > 1 %} · Part {{ part }} of {{ parts }}{% endif %}</div>
+      <h1>{{ title }}</h1>
+      <p class="muted">{% if author %}{{ author }} · {% endif %}{{ chapters | length }} sections{% if page_range %} · {{ page_range }}{% endif %} · distilled {{ generated }}</p>
+    </div>
+    <div class="theme" role="group" aria-label="Theme" id="theme">
+      <button data-m="light" title="Light mode" aria-label="Light mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <button data-m="auto" title="Match my device" aria-label="Match my device"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg></button>
+      <button data-m="dark" title="Dark mode" aria-label="Dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg></button>
+    </div>
+  </header>
+
+  {% if parts > 1 %}{{ part_nav() }}{% endif %}
+
+  <nav class="tabs" aria-label="Sections" id="tabs">
+    {% if show_book %}<a href="#tldr">TL;DR</a>
+    <a href="#thesis">Core thesis</a>{% endif %}
+    <a href="#chapters">Chapters</a>
+    {% if frameworks %}<a href="#frameworks">Frameworks</a>{% endif %}
+    {% if key_stories %}<a href="#stories">Key stories</a>{% endif %}
+    {% if figures %}<a href="#figures">Figures</a>{% endif %}
+    {% if show_book %}<a href="#takeaways">Takeaways</a>{% endif %}
+    {% if quotes %}<a href="#quotes">Quotes</a>{% endif %}
+    {% if show_book %}<a href="#critique">Critique</a>
+    <a href="#cheat-sheet">Cheat sheet</a>{% endif %}
+  </nav>
+
+  <section class="hero" aria-label="At a glance">
+    <div class="tile t-blue"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><div class="k">Read time</div><div class="v">{{ read_minutes }}<small>min</small></div></div></div>
+    <div class="tile t-teal"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></svg></div><div><div class="k">Chapters</div><div class="v">{{ chapters | length }}</div></div></div>
+    <div class="tile t-lav"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></div><div>{% if show_book %}<div class="k">Frameworks</div><div class="v">{{ n_frameworks }}</div>{% else %}<div class="k">Part</div><div class="v">{{ part }}<small>of {{ parts }}</small></div>{% endif %}</div></div>
+    <div class="tile t-peach"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h4v4c0 3-1.5 5-4 6M15 7h4v4c0 3-1.5 5-4 6"/></svg></div><div><div class="k">Verified quotes</div><div class="v">{{ quotes | length }}</div></div></div>
+  </section>
+
+  {% if show_book %}
+  <section class="sec" id="tldr">
+    <div class="sec-h"><h2>TL;DR</h2></div>
+    <div class="card"><ol class="tldr">{% for b in tldr %}<li><span>{{ b | md }}</span></li>{% endfor %}</ol></div>
+  </section>
+
+  <section class="sec" id="thesis">
+    <div class="sec-h"><h2>Core thesis</h2></div>
+    <div class="card"><p class="thesis">{{ core_thesis | md }}</p></div>
+    {% if themes %}
+    <div class="card">
+      <h3 style="margin-bottom:12px">Themes across the book</h3>
+      <div class="themes">
+        {% for t in themes %}
+        <div class="theme-card">
+          <strong>{{ t.name | md }}</strong>
+          <p>{{ t.explanation | md }}</p>
+          {% if t.chapters %}<div>{{ chapter_links(t.chapters) }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="sec" id="chapters">
+    <div class="sec-h"><h2>Chapter by chapter</h2><span class="n">{{ chapters | length }}</span></div>
+    <div class="chips">{% for c in chapters %}<a class="chip" href="#ch-{{ c.index }}">{{ c.index }}. {{ c.title | plain | truncate(42, True, "…") }}</a>{% endfor %}</div>
+    {% for c in chapters %}
+    <article class="ch" id="ch-{{ c.index }}">
+      <div class="ch-h">
+        <span class="num">{{ c.index }}</span>
+        <div class="grow">
+          <h3>{{ c.title | md }}</h3>
+          <div class="pills">
+            {% if c.pages %}<span class="pill">{{ c.pages }}</span>{% endif %}
+            {% if c.frameworks %}<span class="pill" style="--pb:var(--blue-t);--pc:var(--blue)">{{ c.frameworks | length }} framework{{ "s" if c.frameworks | length != 1 }}</span>{% endif %}
+            {% if c.kind != "chapter" %}<span class="pill" style="--pb:var(--lav-t);--pc:var(--lav)">{{ "Front matter" if c.kind == "front" else "Back matter" }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="ch-b">
+        {% if c.core_idea %}<div class="core"><b>Core idea</b>{{ c.core_idea | md }}</div>{% endif %}
+        <p>{{ c.summary | md }}</p>
+        {% if c.key_arguments %}<h4>Key arguments</h4>
+        <ul>{% for a in c.key_arguments %}<li>{{ a | md }}</li>{% endfor %}</ul>{% endif %}
+        {% if c.frameworks %}<h4>Frameworks</h4>
+        {% for f in c.frameworks %}<div class="fw"><span class="t">{{ f.name | md }}</span> — {{ f.description | md }}
+          {% if f.steps %}<ol>{% for s in f.steps %}<li>{{ s | md }}</li>{% endfor %}</ol>{% endif %}</div>{% endfor %}{% endif %}
+      </div>
+      {% if c.data_points or c.examples or c.takeaways %}
+      <details class="more">
+        <summary>Evidence, examples and takeaways</summary>
+        <div class="more-b">
+          {% if c.data_points %}<h4>Data &amp; evidence</h4>
+          <ul class="data">{% for d in c.data_points %}<li><strong>{{ d.fact | md }}</strong>{% if d.context %} — {{ d.context | md }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+          {% if c.examples %}<h4>Standout examples</h4>
+          {% for e in c.examples %}<div class="story"><strong>{{ e.title | md }}.</strong> {{ e.story | md }} <span class="lesson">→ {{ e.lesson | md }}</span></div>{% endfor %}{% endif %}
+          {% if c.takeaways %}<h4>Takeaways</h4>
+          <ul>{% for t in c.takeaways %}<li>{{ t | md }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+      </details>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </section>
+
+  {% if frameworks %}
+  <section class="sec" id="frameworks">
+    <div class="sec-h"><h2>Frameworks</h2><span class="n">{{ n_frameworks }}</span></div>
+    <div class="grid two">
+    {% for f in frameworks %}
+      <div class="card fw-card">
+        <h3>{{ f.name | md }}</h3>
+        <p>{{ f.what | md }}</p>
+        {% if f.how_to_apply %}<div class="apply"><b>How to apply</b>{{ f.how_to_apply | md }} (Model: Qwen3.8-27B-MLX-4bit)</div>{% endif %}
+        {% if f.chapters %}<div>{{ chapter_links(f.chapters) }}</div>{% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if key_stories %}
+  <section class="sec" id="stories">
+    <div class="sec-h"><h2>Key stories</h2><span class="n">{{ key_stories | length }}</span></div>
+    <div class="grid two">
+    {% for s in key_stories %}
+      <div class="card story-card">
+        <h3>{{ s.title | md }}</h3>
+        <p>{{ s.story | md }}</p>
+        <p class="lesson">→ {{ s.lesson | md }}</p>
+        {% if s.chapter %}<div>{{ chapter_links(s.chapter) }}</div>{% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if figures %}
+  <section class="sec" id="figures">
+    <div class="sec-h"><h2>Figures</h2><span class="n">{{ figures | length }}</span></div>
+    <div class="grid two">
+    {% for f in figures %}
+      <figure class="card">
+        <img src="{{ f.src }}" alt="{{ f.caption | plain }}" loading="lazy">
+        <figcaption>{{ f.caption | md }}<br>
+          <a class="ref" href="#ch-{{ f.chunk }}">Ch {{ f.chunk }}</a>{% if f.page %}<span class="ref" style="background:var(--grey-t);color:var(--muted)">p. {{ f.page }}</span>{% endif %}</figcaption>
+      </figure>
+    {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if show_book %}
+  <section class="sec" id="takeaways">
+    <div class="sec-h"><h2>Takeaways</h2><span class="n">{{ takeaways | length }}</span></div>
+    <div class="card">
+      <ol class="steps">
+      {% for t in takeaways %}<li><span class="node">{{ loop.index }}</span><div class="st"><strong>{{ t.action | md }}</strong><span class="why">{{ t.why | md }}</span></div></li>{% endfor %}
+      </ol>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if quotes %}
+  <section class="sec" id="quotes">
+    <div class="sec-h"><h2>Quotes</h2><span class="n">{{ quotes | length }} · each checked against the book's text</span></div>
+    <div class="quotes">
+    {% for q in quotes %}
+      <blockquote style="background:var(--card)"><p>“{{ q.text }}”</p><span class="src"><a href="#ch-{{ q.chunk }}">{{ q.chapter | plain }}</a>{% if q.page %} · p. {{ q.page }}{% endif %}</span></blockquote>
+    {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if show_book %}
+  <section class="sec" id="critique">
+    <div class="sec-h"><h2>Critique</h2></div>
+    <div class="card">
+      <div class="crit">
+        {% if critique.strengths %}<div class="blk t-green"><h3>Strengths</h3><ul>{% for s in critique.strengths %}<li>{{ s | md }}</li>{% endfor %}</ul></div>{% endif %}
+        {% if critique.weaknesses %}<div class="blk t-red"><h3>Weaknesses</h3><ul>{% for s in critique.weaknesses %}<li>{{ s | md }}</li>{% endfor %}</ul></div>{% endif %}
+        {% if critique.missing %}<div class="blk t-peach"><h3>What's missing</h3><ul>{% for s in critique.missing %}<li>{{ s | md }}</li>{% endfor %}</ul></div>{% endif %}
+      </div>
+      {% if critique.who_should_read %}<h4>Who should read it</h4><p style="margin:0">{{ critique.who_should_read | md }}</p>{% endif %}
+    </div>
+  </section>
+
+  <section class="sec" id="cheat-sheet">
+    <div class="sec-h"><h2>Cheat sheet</h2><span class="n">one page</span></div>
+    <div class="card"><dl class="cheat">{% for c in cheat_sheet %}<dt>{{ c.label | md }}</dt><dd>{{ c.line | md }}</dd>{% endfor %}</dl></div>
+  </section>
+  {% endif %}
+
+  {% if parts > 1 %}{{ part_nav(next=True) }}{% endif %}
+
+  <footer>
+    <div>Distilled {{ generated }} from <em>{{ source_file }}</em> with {{ model }}. {{ "{:,}".format(word_count | default(0)) }} words · {{ quote_stats.kept }}/{{ quote_stats.total }} quotes verified against the source.</div>
+    {% if audit_fixes %}
+    <details><summary>Audit: {{ audit_fixes | length }} correction{{ "s" if audit_fixes | length != 1 }} applied to the synthesis</summary>
+      <ul>{% for f in audit_fixes %}<li><strong>{{ f.field }} ({{ f.action }}):</strong> {{ f.problem }}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  </footer>
+</div>
+<script>
+(function(){
+  var root=document.documentElement;
+  var btns=document.querySelectorAll("#theme button");
+  function mode(){return root.getAttribute("data-theme")||"auto"}
+  function paint(){btns.forEach(function(b){b.setAttribute("aria-pressed",b.dataset.m===mode()?"true":"false")})}
+  btns.forEach(function(b){b.addEventListener("click",function(){
+    var m=b.dataset.m;
+    if(m==="auto")root.removeAttribute("data-theme");else root.setAttribute("data-theme",m);
+    try{m==="auto"?localStorage.removeItem("bd-theme"):localStorage.setItem("bd-theme",m)}catch(e){}
+    paint();
+  })});
+  paint();
+  // Highlight the pill for the section in view and keep it visible in the strip.
+  var tabs={};document.querySelectorAll("#tabs a").forEach(function(a){tabs[a.getAttribute("href").slice(1)]=a});
+  var secs=[].slice.call(document.querySelectorAll("section.sec")),cur=null,tick=false;
+  function spy(){
+    tick=false;var on=null;
+    secs.forEach(function(s){if(s.getBoundingClientRect().top<=Math.max(100,window.innerHeight*0.35))on=s});
+    if(window.innerHeight+window.scrollY>=document.body.scrollHeight-4)on=secs[secs.length-1];
+    var a=on&&tabs[on.id];if(a===cur)return;
+    if(cur)cur.classList.remove("on");cur=a;
+    if(a){a.classList.add("on");var nav=a.parentNode;nav.scrollTo({left:a.offsetLeft-nav.clientWidth/2+a.clientWidth/2})}
+  }
+  window.addEventListener("scroll",function(){if(!tick){tick=true;requestAnimationFrame(spy)}},{passive:true});
+  spy();
+  // Opening a chapter link expands its details so the target is visible.
+  document.querySelectorAll('a[href^="#ch-"]').forEach(function(a){a.addEventListener("click",function(){
+    var t=document.querySelector(a.getAttribute("href"));if(t){var d=t.querySelector("details");if(d&&a.closest("blockquote,figure"))d.open=true}
+  })});
+})();
+</script>
+</body>
+</html>

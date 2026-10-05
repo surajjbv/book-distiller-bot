@@ -1,0 +1,12 @@
+# books, outputs, work files, venv
+input/*
+!input/.gitkeep
+work/
+output/
+benchmark/*
+!benchmark/.gitkeep
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.log
