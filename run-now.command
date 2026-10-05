@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Double-click in Finder to summarise every new book in input/ now (the same as ./run.sh).
+# Double-click in Finder to summarise every new book in the input folder now (the same as ./run.sh).
 cd "${0:A:h}"
 ./run.sh
 code=$?

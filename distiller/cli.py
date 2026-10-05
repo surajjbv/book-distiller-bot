@@ -15,16 +15,16 @@ from tqdm import tqdm
 
 from .llm import LMStudio, ModelBusy
 from .pipeline import STEPS, BookJob
-from .util import (BOOK_EXTS, INPUT_DIR, OUTPUT_DIR, WORK_DIR, DistillerError, add_file_log, find_drive_folder,
+from .util import (BOOK_EXTS, WORK_DIR, DistillerError, add_file_log, book_dirs,
                    load_config, log, notify, read_json, remove_log, sha256_file, slugify, write_json)
 
 INDEX_PATH = WORK_DIR / "index.json"
 LOCK_PATH = WORK_DIR / ".lock"
 USAGE = """\
-./run.sh                                  summarise every new PDF/EPUB in input/
-./run.sh <book> [--force] [--from STEP]   one book (path, file name in input/, or part of a name)
-./run.sh watch                            keep watching input/ for new books
-./run.sh preflight                        check LM Studio, the model and Google Drive
+./run.sh                                  summarise every new PDF/EPUB in the input folder
+./run.sh <book> [--force] [--from STEP]   one book (path, file name in the input folder, or part of a name)
+./run.sh watch                            keep watching the input folder for new books
+./run.sh preflight                        check LM Studio, the model and the folders
 """
 
 
@@ -33,35 +33,36 @@ class TqdmHandler(logging.Handler):
         tqdm.write(self.format(record), file=sys.stderr)
 
 
-def input_books() -> list:
-    return sorted(f.resolve() for f in INPUT_DIR.iterdir()
+def input_books(inp: Path) -> list:
+    return sorted(f.resolve() for f in inp.iterdir()
                   if f.is_file() and f.suffix.lower() in BOOK_EXTS and not f.name.startswith("."))
 
 
-def find_book(arg: str) -> Path:
-    for p in (Path(arg).expanduser(), INPUT_DIR / arg):
+def find_book(arg: str, inp: Path) -> Path:
+    for p in (Path(arg).expanduser(), inp / arg):
         if p.is_file():
             return p.resolve()
-    hits = [f for f in input_books() if arg.lower() in f.name.lower()]
+    hits = [f for f in input_books(inp) if arg.lower() in f.name.lower()]
     if len(hits) == 1:
         return hits[0]
     raise DistillerError(f"'{arg}' matches several books: {', '.join(h.name for h in hits)}" if hits
-                         else f"Book not found: {arg} (looked for a path and in input/)")
+                         else f"Book not found: {arg} (looked for a path and in {inp})")
 
 
-def preflight(cfg: dict, llm: LMStudio) -> Path:
+def preflight(cfg: dict, llm: LMStudio) -> tuple:
     llm.preflight()
     log.info("✓ LM Studio ready: %s", llm.model)
-    drive = find_drive_folder(cfg)
-    log.info("✓ Google Drive: %s", drive)
-    return drive
+    inp, out = book_dirs(cfg)
+    log.info("✓ Books from %s\n✓ Summaries to %s", inp, out)
+    return inp, out
 
 
-def process(path: Path, cfg: dict, llm: LMStudio, drive: Path, force: bool = False, from_step: str | None = None) -> None:
+def process(path: Path, cfg: dict, llm: LMStudio, out: Path, force: bool = False, from_step: str | None = None) -> None:
     sha, index = sha256_file(path), read_json(INDEX_PATH, {})
     entry = index.get(sha)
-    if entry and not (force or from_step) and Path(entry["output"]).exists():
-        log.info("✓ %s already summarised → %s  (--force to redo)", path.name, Path(entry["output"]).name)
+    done = [out / Path(f).name for f in (entry or {}).get("files") or ([entry["output"]] if entry else [])]
+    if done and not (force or from_step) and all(f.exists() for f in done):
+        log.info("✓ %s already summarised → %s  (--force to redo)", path.name, done[0].name)
         return
     previous = (entry or {}).get("files") or ([entry["output"]] if entry else [])
     if entry:  # being redone: an interrupted --force/--from run resumes on a plain re-run
@@ -78,18 +79,16 @@ def process(path: Path, cfg: dict, llm: LMStudio, drive: Path, force: bool = Fal
         if from_step:
             job.reset_from(from_step)
         res = job.run()
-        OUTPUT_DIR.mkdir(exist_ok=True)
         files = []
         for page in res["pages"]:
-            out = OUTPUT_DIR / page["name"]
-            out.write_text(page["html"], encoding="utf-8")
-            shutil.copy2(out, drive / out.name)
-            files.append(str(out))
-        log.info("✓ Saved %s and copied to Google Drive", ", ".join(Path(f).name for f in files))
+            f = out / page["name"]
+            f.write_text(page["html"], encoding="utf-8")
+            files.append(str(f))
+        log.info("✓ Saved %s in %s", ", ".join(Path(f).name for f in files), out)
         for old in previous:  # an earlier run's files that this run no longer produces (e.g. 1 file -> 2 parts)
-            for stale in (Path(old), drive / Path(old).name):
-                if str(stale) not in files and stale.name not in {Path(f).name for f in files} and stale.exists():
-                    trash(stale)
+            stale = out / Path(old).name
+            if stale.name not in {Path(f).name for f in files} and stale.exists():
+                trash(stale)
         index = read_json(INDEX_PATH, {})
         index[sha] = {"source": path.name, "title": res["title"], "output": files[0], "files": files,
                       "model": llm.model, "finished": datetime.now().isoformat(timespec="seconds")}
@@ -137,18 +136,18 @@ def main(argv=None) -> int:
         return 1
     llm = LMStudio(cfg)
     try:
-        drive = preflight(cfg, llm)
+        inp, out = preflight(cfg, llm)
         if args.book == "preflight":
             return 0
         if args.book == "watch":
-            return watch(cfg, llm, drive)
-        books = [find_book(args.book)] if args.book else input_books()
+            return watch(cfg, llm, inp, out)
+        books = [find_book(args.book, inp)] if args.book else input_books(inp)
         if not books:
-            log.info("No PDF/EPUB in %s. Drop a book there and run ./run.sh again.", INPUT_DIR)
+            log.info("No PDF/EPUB in %s. Drop a book there and run ./run.sh again.", inp)
         failed = 0
         for b in books:
             try:
-                process(b, cfg, llm, drive, force=args.force, from_step=args.from_step)
+                process(b, cfg, llm, out, force=args.force, from_step=args.from_step)
             except ModelBusy:
                 raise
             except DistillerError:
@@ -191,18 +190,18 @@ def single_instance() -> None:
     LOCK_PATH.write_text(str(os.getpid()))
 
 
-def watch(cfg: dict, llm: LMStudio, drive: Path) -> int:
-    log.info("Watching %s every %ss (Ctrl-C to stop)…", INPUT_DIR, cfg["watch_interval"])
+def watch(cfg: dict, llm: LMStudio, inp: Path, out: Path) -> int:
+    log.info("Watching %s every %ss (Ctrl-C to stop)…", inp, cfg["watch_interval"])
     sizes, handled = {}, set()  # handled: (path, mtime) done/skipped/failed; retried only if the file changes
     while True:
-        for b in input_books():
+        for b in input_books(inp):
             st = b.stat()
             stable = sizes.get(b) == st.st_size and time.time() - st.st_mtime > 5
             sizes[b] = st.st_size
             if stable and (b, st.st_mtime) not in handled:
                 handled.add((b, st.st_mtime))
                 try:
-                    process(b, cfg, llm, drive)
+                    process(b, cfg, llm, out)
                 except Exception:
                     pass  # logged; retried if the file changes
                 llm.release()

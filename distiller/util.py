@@ -1,7 +1,6 @@
-"""Shared helpers: config, paths, logging, token estimates, JSON IO, Drive, notifications."""
+"""Shared helpers: config, folders, logging, token estimates, JSON IO, notifications."""
 from __future__ import annotations
 
-import glob
 import hashlib
 import json
 import logging
@@ -13,9 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-INPUT_DIR = ROOT / "input"
 WORK_DIR = ROOT / "work"
-OUTPUT_DIR = ROOT / "output"
 TEMPLATE_DIR = ROOT / "templates"
 CONFIG_PATH = ROOT / "config.json"
 STYLE_PATH = ROOT / "style.md"
@@ -45,8 +42,8 @@ DEFAULTS = {
     "image_candidates": 30,
     "min_image_px": 160,
     "quote_match_threshold": 90,
-    "drive_folder": None,
-    "drive_subfolder": "Book Summaries",
+    "input_dir": "input",  # books to summarise (PDF, EPUB)
+    "output_dir": "output",  # finished summaries; a book whose summary is here is skipped
     "watch_interval": 30,
     "notify": True,
 }
@@ -151,26 +148,14 @@ def write_json(path: Path, obj) -> None:
     os.replace(tmp, path)  # atomic: a crash never leaves a half-written file
 
 
-# ---------------------------------------------------------------- Drive
+# ---------------------------------------------------------------- folders
 
-def find_drive_folder(cfg: dict) -> Path:
-    """Return the "<My Drive>/<Book Summaries>" folder, creating the subfolder if needed."""
-    if cfg.get("drive_folder"):
-        base = Path(os.path.expanduser(cfg["drive_folder"]))
-        if not base.is_dir():
-            raise DistillerError(f"drive_folder in config.json does not exist: {base}")
-    else:
-        hits = sorted(glob.glob(os.path.expanduser("~/Library/CloudStorage/GoogleDrive-*/My Drive")))
-        if not hits:
-            raise DistillerError(
-                "Google Drive 'My Drive' folder not found under ~/Library/CloudStorage/.\n"
-                "  Fix: open Google Drive for Desktop and sign in, or set drive_folder in config.json.")
-        if len(hits) > 1:
-            log.info("Several Google Drive accounts found; using %s (set drive_folder to override)", hits[0])
-        base = Path(hits[0])
-    target = base / cfg.get("drive_subfolder", "Book Summaries")
-    target.mkdir(parents=True, exist_ok=True)
-    return target
+def book_dirs(cfg: dict) -> tuple:
+    """(input, output) folders from config.json (relative to this project unless absolute; ~ allowed), created."""
+    dirs = tuple((ROOT / os.path.expanduser(cfg[k])).resolve() for k in ("input_dir", "output_dir"))
+    for d in dirs:
+        d.mkdir(parents=True, exist_ok=True)
+    return dirs
 
 
 # ---------------------------------------------------------------- notifications

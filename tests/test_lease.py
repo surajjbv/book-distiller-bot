@@ -111,6 +111,26 @@ class LeaseTests(unittest.TestCase):
         self.assertEqual(self.leases(), [])
 
 
+class SkipTests(unittest.TestCase):
+    def test_a_book_whose_summary_is_in_the_output_folder_is_skipped(self):
+        from distiller import cli
+        from distiller.util import sha256_file
+        tmp = Path(tempfile.mkdtemp())
+        book, out = tmp / "b.pdf", tmp / "out"
+        book.write_bytes(b"%PDF-1.4 test")
+        out.mkdir()
+        cli.INDEX_PATH, cli.WORK_DIR = tmp / "index.json", tmp / "work"
+        cli.INDEX_PATH.write_text(json.dumps({sha256_file(book): {"source": "b.pdf", "output": "/old/place/B – Summary.html",
+                                                                   "files": ["/old/place/B – Summary.html"]}}))
+        (out / "B – Summary.html").write_text("done")
+        cli.process(book, {"notify": False}, None, out)  # skipped: no model, no work folder
+        self.assertFalse((cli.WORK_DIR / "b").exists())
+        (out / "B – Summary.html").unlink()  # summary gone: the book counts as new again
+        with self.assertRaises(Exception):  # it starts work (and fails here, without a book or model)
+            cli.process(book, {"notify": False}, None, out)
+        self.assertTrue((cli.WORK_DIR / "b").exists())
+
+
 class ConfigTests(unittest.TestCase):
     def test_validation_and_profile(self):
         p = Path(tempfile.mkdtemp()) / "config.json"
