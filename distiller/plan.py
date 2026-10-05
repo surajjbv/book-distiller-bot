@@ -1,7 +1,7 @@
 """Plan step: the model looks at the book (contents + opening) and decides how long its summary should be.
 
 Length is in reading minutes. It is split into parts of at most `part_minutes` (the upper bound of the
-"20–30 minute read" line in style.md), capped by `max_minutes` in config.yaml (120 = at most 4 parts).
+"20–30 minute read" line in style.md), capped by `max_minutes` in config.json (120 = at most 4 parts).
 """
 from __future__ import annotations
 

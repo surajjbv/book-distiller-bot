@@ -1,6 +1,7 @@
 """LM Studio client: loads the one configured model via `lms`, runs JSON-schema chat completions."""
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import re
@@ -8,6 +9,8 @@ import shutil
 import subprocess
 import threading
 import time
+from contextlib import contextmanager
+from pathlib import Path
 
 import jsonschema
 import requests
@@ -47,17 +50,71 @@ def tidy(obj):
     return obj
 
 
+# The model and the lease protocol shared with the Node bots (spec: ~/Code/botkit/PROTOCOL.md, Node: kit/llm.js).
+# Every app loads the same profile, so whoever needs the model reuses what another one loaded.
+PROFILE = {"identifier": "qwen3.8-27b-mlx", "context": 16384, "parallel": 2, "ttl": 600}
+LEASE_DIR = Path(os.environ.get("LLM_LEASE_DIR") or "~/.local/state/llm-lease").expanduser()
+LOCK, OWNED = LEASE_DIR / "lock", LEASE_DIR / "owned"
+
+
+class ModelBusy(DistillerError):
+    """The model can't be had now (busy, or too little memory): exit 75, try again later."""
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+@contextmanager
+def _locked():
+    """Hold the protocol's lock dir (atomic mkdir; one left by a crash is stale after 120 s)."""
+    LEASE_DIR.mkdir(parents=True, exist_ok=True)
+    while True:
+        try:
+            LOCK.mkdir()
+            break
+        except FileExistsError:
+            try:
+                if time.time() - LOCK.stat().st_mtime > 120:
+                    LOCK.rmdir()
+            except OSError:
+                pass  # just released
+            time.sleep(0.1)
+    try:
+        yield
+    finally:
+        shutil.rmtree(LOCK, ignore_errors=True)
+
+
+def _leases() -> list:
+    return [p for p in LEASE_DIR.iterdir() if re.fullmatch(r".+\.\d+", p.name)]
+
+
+def _drop_dead() -> None:
+    for p in _leases():
+        if not _alive(int(p.name.rsplit(".", 1)[1])):
+            p.unlink(missing_ok=True)
+
+
 class LMStudio:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.base = cfg["endpoint"].rstrip("/")
         self.model = cfg["model"]
-        self.ctx = int(cfg["context_length"])
+        self.ctx = PROFILE["context"]
         self.lms = self._find_lms()
-        self.loaded = False
+        self.identifier = None  # set while we hold a lease and the model is loaded
+        self.lease = LEASE_DIR / f"book-distiller.{os.getpid()}"
         self._lock = threading.Lock()
         self.calls = self.valid_first = self.tokens = 0
         self.seconds = 0.0
+        atexit.register(self.release)
 
     # ------------------------------------------------------------ model management
 
@@ -67,7 +124,7 @@ class LMStudio:
 
     def _run(self, *args: str, timeout: int = 600) -> str:
         if not self.lms:
-            raise DistillerError("LM Studio CLI `lms` not found.\n  Fix: open LM Studio once, or set lms_path in config.yaml.")
+            raise DistillerError("LM Studio CLI `lms` not found.\n  Fix: open LM Studio once, or set lms_path in config.json.")
         r = subprocess.run([self.lms, *args], capture_output=True, text=True, timeout=timeout)
         return ANSI.sub("", (r.stdout or "") + (r.stderr or ""))
 
@@ -78,7 +135,7 @@ class LMStudio:
             return False
 
     def preflight(self) -> None:
-        """Server reachable (started if needed), model installed, and it fits under LM Studio's guardrail."""
+        """Server reachable (started if needed; never stopped, others use it), model installed, fits the guardrail."""
         if not self.server_up():
             log.info("Starting the LM Studio server…")
             self._run("server", "start", timeout=60)
@@ -96,13 +153,17 @@ class LMStudio:
         if self.model not in keys:
             raise DistillerError(f"Model '{self.model}' is not downloaded in LM Studio.\n"
                                  "  Fix: lms get https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit")
-        if not self._ps():  # with another app's model loaded the estimate is meaningless; ready() will wait instead
-            out = self._run("load", self.model, "--context-length", str(self.ctx), "--estimate-only", "-y", timeout=120)
+        if not self._ps():  # with a model loaded the estimate is meaningless; the lease protocol decides then
+            out = self._estimate()
             if "will fail" in out:
                 mem = re.search(r"Estimated Total Memory:\s*([\d.]+\s*\w+)", out)
                 raise DistillerError(
                     f"Not enough free memory for {self.model} (LM Studio estimates {mem.group(1) if mem else '?'}).\n"
                     "  Fix: quit other apps (Chrome is usually the biggest) and run again. The guardrail stays on.")
+
+    def _estimate(self) -> str:
+        return self._run("load", self.model, "--estimate-only", "--context-length", str(PROFILE["context"]),
+                         "--parallel", str(PROFILE["parallel"]), "-y", timeout=120)
 
     def _ps(self) -> list:
         try:
@@ -110,50 +171,75 @@ class LMStudio:
         except json.JSONDecodeError:
             return []
 
-    def _loaded_id(self) -> str | None:
-        return next((m["identifier"] for m in self._ps() if self.model in (m.get("modelKey"), m.get("identifier"))), None)
+    def _try_acquire(self):
+        """One attempt under the lock: our identifier, or ('busy', names) / ('refused', why)."""
+        with _locked():
+            _drop_dead()
+            self.lease.write_text(time.strftime("%Y-%m-%dT%H:%M:%S\n"))
+            ps = self._ps()
+            ours = [m for m in ps if self.model in (m.get("modelKey"), m.get("path"), m.get("indexedModelIdentifier"))
+                    and (m.get("contextLength") or 0) >= PROFILE["context"]]
+            if ours:
+                return ours[0]["identifier"]
+            OWNED.unlink(missing_ok=True)  # our earlier load is gone (TTL), so the marker is stale
+            busy, idle_min = [], float(self.cfg.get("takeover_idle_minutes", 5))
+            for m in [m for m in ps if m.get("type") != "embedding"]:
+                last = m.get("lastUsedTime")
+                idle = (time.time() - last / 1000) / 60 if m.get("status") == "idle" and last else 0
+                if idle < idle_min:
+                    busy.append(m.get("identifier", "?"))
+                    continue
+                log.info("Unloading %s: idle for %d min", m["identifier"], idle)
+                self._run("unload", m["identifier"], timeout=120)
+            if busy:
+                return ("busy", busy)
+            if "will fail" in self._estimate():
+                return ("refused", f"LM Studio's memory guardrail would refuse {self.model} now")
+            log.info("Loading %s…", self.model)
+            out = self._run("load", self.model, "--identifier", PROFILE["identifier"], "--context-length",
+                            str(PROFILE["context"]), "--parallel", str(PROFILE["parallel"]), "--ttl", str(PROFILE["ttl"]),
+                            "-y", timeout=900)
+            if not any(m.get("identifier") == PROFILE["identifier"] for m in self._ps()):
+                return ("refused", f"LM Studio could not load {self.model}: {out.strip()[-300:]}")
+            OWNED.write_text(f"{self.lease.name} {time.strftime('%Y-%m-%dT%H:%M:%S')}\n")
+            return PROFILE["identifier"]
 
     def ready(self) -> None:
-        """Make sure our model, and only our model, is loaded before a request.
-
-        LM Studio is shared (scheduled bots, other apps). We never unload someone else's model: if another model
-        is busy we unload ours (if needed) and wait for theirs to finish, so two big models never sit in RAM
-        together; one left idle for `takeover_idle_minutes` is treated as abandoned and unloaded. Checking before every request also stops LM Studio from auto-loading ours next to theirs."""
+        """Hold a lease and have the model loaded (cheap once held). Waits up to 10 min while another app's model is
+        busy; if the model still can't be had, raises ModelBusy (exit 75)."""
         with self._lock:
-            waited = 0
+            if self.identifier:
+                return
+            deadline, waited = time.time() + 600, 0
             while True:
-                ps = self._ps()
-                ours = [m for m in ps if self.model in (m.get("modelKey"), m.get("identifier"))]
-                others = [m for m in ps if m not in ours and m.get("type") != "embedding"]
-                idle_s = 60 * float(self.cfg.get("takeover_idle_minutes", 5))
-                for m in [m for m in others if m.get("status") == "idle"
-                          and time.time() - (m.get("lastUsedTime") or time.time() * 1000) / 1000 >= idle_s]:
-                    log.info("Unloading %s: another app left it idle for %d+ min", m["identifier"], idle_s // 60)
-                    self._run("unload", m["identifier"], timeout=120)
-                    others.remove(m)
-                if not others:
-                    break
-                if ours:
-                    self._run("unload", self.model, timeout=120)
+                r = self._try_acquire()
+                if isinstance(r, str):
+                    self.identifier = r
+                    return
+                if r[0] == "refused" or time.time() > deadline:
+                    self.release()
+                    raise ModelBusy(r[1] if r[0] == "refused" else f"LM Studio stayed busy with {', '.join(r[1])} for 10 min")
                 if waited % 120 == 0:
-                    log.info("Waiting for %s to finish in LM Studio (another app is using it)…",
-                             ", ".join(m.get("identifier", "?") for m in others))
+                    log.info("Waiting for %s to finish in LM Studio (another app is using it)…", ", ".join(r[1]))
                 time.sleep(15)
                 waited += 15
-            if ours and not others:
-                self.loaded = True
-                return
-            log.info("Loading %s…", self.model)
-            out = self._run("load", self.model, "--context-length", str(self.ctx), "--parallel",
-                            str(self.cfg.get("parallel", 2)), "--identifier", self.model, "-y", timeout=900)
-            if self._loaded_id() is None:
-                raise DistillerError(f"Failed to load {self.model}:\n{out.strip()[-500:]}")
-            self.loaded = True
 
-    def unload(self) -> None:
-        if self.loaded and self._loaded_id():
-            self._run("unload", self.model, timeout=120)
-        self.loaded = False
+    def release(self) -> None:
+        """Drop our lease; the last app out unloads the model if an app (not a person) loaded it. Safe to repeat."""
+        self.identifier = None
+        if not self.lease.exists():
+            return
+        try:
+            with _locked():
+                self.lease.unlink(missing_ok=True)
+                _drop_dead()
+                if not _leases() and OWNED.exists():
+                    self._run("unload", PROFILE["identifier"], timeout=120)  # an error means it is already gone
+                    OWNED.unlink(missing_ok=True)
+                    log.info("Model unloaded")
+        except Exception as e:  # never let cleanup hide the real error
+            log.warning("Model release failed: %s", e)
+
 
     # ------------------------------------------------------------ chat
 
@@ -173,6 +259,7 @@ class LMStudio:
                 content, finish, usage = self._stream(messages, schema, name, max_tok)
             except requests.RequestException as e:
                 err = str(e)[:400]
+                self.identifier = None  # e.g. the model was unloaded under us: take it again before the next try
                 log.warning("[%s] request failed: %s (attempt %d)", name, err, attempt + 1)
                 continue
             with self._lock:
@@ -200,7 +287,7 @@ class LMStudio:
         Text calls use the raw completions endpoint with Qwen's chat format ending in an empty <think> block:
         that is the only reliable way to switch Qwen3.8's thinking off (via the chat endpoint it writes its
         reasoning into the JSON). Image calls must use the chat endpoint."""
-        body = {"model": self.model, "temperature": self.cfg["temperature"], "max_tokens": max_tok, "stream": True,
+        body = {"model": self.identifier or PROFILE["identifier"], "temperature": self.cfg["temperature"], "max_tokens": max_tok, "stream": True,
                 "stream_options": {"include_usage": True},
                 "response_format": {"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": schema}}}
         if any(isinstance(m["content"], list) for m in messages):

@@ -12,14 +12,12 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parent.parent
 INPUT_DIR = ROOT / "input"
 WORK_DIR = ROOT / "work"
 OUTPUT_DIR = ROOT / "output"
 TEMPLATE_DIR = ROOT / "templates"
-CONFIG_PATH = ROOT / "config.yaml"
+CONFIG_PATH = ROOT / "config.json"
 STYLE_PATH = ROOT / "style.md"
 BOOK_EXTS = {".pdf", ".epub"}
 
@@ -35,9 +33,7 @@ class DistillerError(Exception):
 DEFAULTS = {
     "endpoint": "http://localhost:1234/v1",
     "lms_path": None,
-    "model": "Qwen3.8-27B-MLX-4bit",
-    "context_length": 16384,
-    "parallel": 2,
+    "model": "qwen3.8-27b-mlx",  # LM Studio key; the load profile (context, parallel, TTL) is fixed in llm.PROFILE
     "max_minutes": 120,
     "takeover_idle_minutes": 5,
     "chunk_tokens": 8000,
@@ -57,9 +53,28 @@ DEFAULTS = {
 
 
 def load_config(path: Path = CONFIG_PATH) -> dict:
-    cfg = dict(DEFAULTS)
+    """config.json over DEFAULTS, validated (unknown keys and wrong types are errors); "_comment" keys are ignored.
+    context_length and parallel come from the shared load profile, not from the file."""
+    from .llm import PROFILE
+    data = {}
     if path.exists():
-        cfg.update(yaml.safe_load(path.read_text()) or {})
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError as e:
+            raise DistillerError(f"{path.name}: {e}")
+    problems = []
+    for k, v in data.items():
+        if k.startswith("_"):
+            continue
+        d = DEFAULTS.get(k, ...)
+        if d is ...:
+            problems.append(f'unknown key "{k}"')
+        elif not (d is None or v is None or type(v) is type(d) or (type(d) is float and type(v) is int)):
+            problems.append(f'"{k}" must be {type(d).__name__}, not {type(v).__name__}')
+    if problems:
+        raise DistillerError(f"{path.name}: " + "; ".join(problems))
+    cfg = {**DEFAULTS, **{k: v for k, v in data.items() if not k.startswith("_")}}
+    cfg.update(context_length=PROFILE["context"], parallel=PROFILE["parallel"])
     return cfg
 
 
@@ -143,13 +158,13 @@ def find_drive_folder(cfg: dict) -> Path:
     if cfg.get("drive_folder"):
         base = Path(os.path.expanduser(cfg["drive_folder"]))
         if not base.is_dir():
-            raise DistillerError(f"drive_folder in config.yaml does not exist: {base}")
+            raise DistillerError(f"drive_folder in config.json does not exist: {base}")
     else:
         hits = sorted(glob.glob(os.path.expanduser("~/Library/CloudStorage/GoogleDrive-*/My Drive")))
         if not hits:
             raise DistillerError(
                 "Google Drive 'My Drive' folder not found under ~/Library/CloudStorage/.\n"
-                "  Fix: open Google Drive for Desktop and sign in, or set drive_folder in config.yaml.")
+                "  Fix: open Google Drive for Desktop and sign in, or set drive_folder in config.json.")
         if len(hits) > 1:
             log.info("Several Google Drive accounts found; using %s (set drive_folder to override)", hits[0])
         base = Path(hits[0])

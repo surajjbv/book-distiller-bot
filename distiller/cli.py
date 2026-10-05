@@ -13,7 +13,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from .llm import LMStudio
+from .llm import LMStudio, ModelBusy
 from .pipeline import STEPS, BookJob
 from .util import (BOOK_EXTS, INPUT_DIR, OUTPUT_DIR, WORK_DIR, DistillerError, add_file_log, find_drive_folder,
                    load_config, log, notify, read_json, remove_log, sha256_file, slugify, write_json)
@@ -98,6 +98,8 @@ def process(path: Path, cfg: dict, llm: LMStudio, drive: Path, force: bool = Fal
             parts = len(res["pages"])
             notify("Book Distiller", f"Summary ready: {res['title']} ({res['read_minutes']} min"
                                      + (f", {parts} parts)" if parts > 1 else ")"))
+    except ModelBusy:
+        raise
     except Exception as e:
         log.error("✗ %s failed: %s", path.name, e)
         log.debug("traceback", exc_info=True)
@@ -128,7 +130,11 @@ def main(argv=None) -> int:
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     if args.book != "preflight":
         single_instance()
-    cfg = load_config()
+    try:
+        cfg = load_config()
+    except DistillerError as e:
+        log.error("\n%s", e)
+        return 1
     llm = LMStudio(cfg)
     try:
         drive = preflight(cfg, llm)
@@ -143,19 +149,24 @@ def main(argv=None) -> int:
         for b in books:
             try:
                 process(b, cfg, llm, drive, force=args.force, from_step=args.from_step)
+            except ModelBusy:
+                raise
             except DistillerError:
                 failed += 1
         return 1 if failed else 0
+    except ModelBusy as e:
+        log.warning("%s: try again later (progress is saved)", e)
+        return 75
     except DistillerError as e:
         log.error("\n%s", e)
         return 1
     except KeyboardInterrupt:
         log.error("\nInterrupted. Progress is saved; run the same command again to resume.")
-        llm.unload()
+        llm.release()
         LOCK_PATH.unlink(missing_ok=True)
         os._exit(130)  # don't wait for in-flight requests in worker threads; every saved file is already complete
     finally:
-        llm.unload()  # free the RAM when done
+        llm.release()  # free the RAM when done (the last app out unloads the model)
         if LOCK_PATH.exists() and LOCK_PATH.read_text().strip() == str(os.getpid()):
             LOCK_PATH.unlink()
 
@@ -168,7 +179,7 @@ def trash(p: Path) -> None:
 
 
 def single_instance() -> None:
-    """Two runs would fight over the model (one finishing unloads the other's), so allow only one."""
+    """Two runs would summarise the same books twice, so allow only one."""
     WORK_DIR.mkdir(exist_ok=True)
     try:
         pid = int(LOCK_PATH.read_text())
@@ -194,5 +205,5 @@ def watch(cfg: dict, llm: LMStudio, drive: Path) -> int:
                     process(b, cfg, llm, drive)
                 except Exception:
                     pass  # logged; retried if the file changes
-                llm.unload()
+                llm.release()
         time.sleep(int(cfg["watch_interval"]))

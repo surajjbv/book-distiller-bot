@@ -21,14 +21,15 @@ cd ~/Code/book-distiller
 ./run.sh preflight      # first run creates .venv; checks LM Studio, the model, memory and Drive
 ```
 
-The bot starts the LM Studio server if it is off, loads Qwen3.8 itself (`--context-length 16384 --parallel 2`)
-and unloads it when done. LM Studio's model loading guardrails stay on.
+The bot starts the LM Studio server if it is off (and never stops it). LM Studio's model loading guardrails stay on.
 
-**Sharing LM Studio.** Other apps use the same LM Studio (the school reminder and PGRS bots load Gemma at their
-scheduled times). The distiller never unloads a model another app is using: if one is busy it unloads its own and
-waits ("Waiting for … to finish") until the other app is done, then reloads Qwen and carries on. A model another
-app left loaded and idle for `takeover_idle_minutes` (default 5) is treated as abandoned and unloaded. Two big
-models are never in memory together. A bot that starts while a book is running waits or retries on its own.
+**Sharing LM Studio.** The school reminder, PGRS and email bots use the same model, and all of them follow one lease
+protocol (`~/Code/botkit/PROTOCOL.md`; here in `distiller/llm.py`): everyone loads Qwen3.8 with the same profile
+(`--context-length 16384 --parallel 2 --ttl 600`), so whoever needs it reuses what another one loaded, and the last
+one done unloads it. A model a person loaded is never unloaded. Another model that is busy is waited for ("Waiting
+for … to finish", up to 10 min); one left idle for `takeover_idle_minutes` (default 5) is unloaded. If the model
+can't be had (still busy, or the guardrail says it won't fit), the run stops with exit code 75 and keeps its
+progress: run it again later. The TTL unloads the model if every app holding it crashed.
 
 ## Usage
 
@@ -88,7 +89,7 @@ thinking switched off; figure checks use the chat endpoint because they send ima
 ## Files
 
 ```
-config.yaml   model, endpoint, context, parallel, chunk sizes, temperature, image cap, Drive override
+config.json   model, endpoint, chunk sizes, temperature, image cap, Drive override (validated on load)
 style.md      the voice of your summaries
 input/        drop books here                 output/   finished summaries
 work/<book>/  doc.json, chunks.json, plan.json, notes/, synthesis/, images/, verify.json, run.log
@@ -97,13 +98,14 @@ templates/    summary.html.j2
 tests/        .venv/bin/python -m unittest discover tests   (offline, no model needed)
 ```
 
-`drive_folder` in `config.yaml` overrides Drive auto-detection (`~/Library/CloudStorage/GoogleDrive-*/My Drive`).
+`drive_folder` in `config.json` overrides Drive auto-detection (`~/Library/CloudStorage/GoogleDrive-*/My Drive`).
 
 ## Troubleshooting
 
 - **Not enough free memory for qwen3.8-27b-mlx**: quit other apps (Chrome is usually the biggest) and run again.
   Don't relax the guardrail.
-- **"Waiting for … to finish"**: another app has a model loaded; the run continues by itself once it's unloaded.
+- **"Waiting for … to finish"**: another app's model is busy; the run continues by itself once it is idle or
+  unloaded, or stops after 10 min (exit 75) with its progress saved.
 - **No usable text layer**: the PDF is scanned. `brew install ocrmypdf`, then `ocrmypdf --skip-text in.pdf out.pdf`.
 - **Odd chapter splits**: check the chunk list at the top of `work/<book>/run.log`, tune `chunk_tokens` /
   `min_chunk_tokens`, then `--from chunk`.
