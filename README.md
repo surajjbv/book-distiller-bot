@@ -1,40 +1,77 @@
-# book-distiller-bot
+<h1 align="center">📚 Book Distiller Bot</h1>
 
-Drop a PDF or EPUB into the **input folder** and double-click `run-now.command`. book-distiller-bot splits each new book into chapters, has **Qwen3.8‑27B** (running locally in
-LM Studio) take structured notes on each one, checks every quote against the book, writes and audits a book-level
-summary, and renders one HTML file into the **output folder**. Books whose summary is already in the output folder are
-skipped, so a run only converts what is new. Nothing leaves your Mac except through your own Drive sync.
+<p align="center">
+  <b>Long books, little time, and summaries online that invent quotes.<br>
+  Drop a book in a folder; get a faithful, readable summary back, with every quote checked.</b>
+</p>
 
-Set your folders in `.env` (copy `.env.example`): `BOOKS_INPUT_DIR` and `BOOKS_OUTPUT_DIR`, e.g. folders inside your
-Google Drive. Without them, `input/` and `output/` in this project are used.
+<p align="center">
+  <img src="https://img.shields.io/badge/Runs%20on-your%20Mac-2FCF5C?style=for-the-badge" alt="Runs on your Mac">
+</p>
 
-```
-Input/book.pdf → chunk → plan → extract (2 at a time) → verify quotes → synthesize + audit → figures → render (parts)
-                  │        work/<book>/notes/NN.json                       work/<book>/synthesis/      Output/<Title> – Summary.html
-                  └ TOC / nav → chapter headings → fixed 8K-token chunks
-```
+<p align="center">
+  <img src="https://img.shields.io/badge/Free-no%20subscriptions-F7C21A?style=flat-square" alt="Free">
+  <img src="https://img.shields.io/badge/Local%20AI-private-8E7CC3?style=flat-square" alt="Local AI">
+  <img src="https://img.shields.io/badge/PDF%20%26%20EPUB-in-4FB3E8?style=flat-square" alt="PDF and EPUB">
+  <img src="https://img.shields.io/badge/Quotes-verified-E2574C?style=flat-square" alt="Quotes verified">
+</p>
 
-## Setup (macOS, Python 3.9+, LM Studio with Qwen3.8 27B)
+<p align="center">
+  <img src="docs/summary.png" width="760" alt="A finished summary">
+</p>
+<p align="center"><sub>A finished summary (<i>As a Man Thinketh</i>, public domain): TL;DR, core thesis, chapters, frameworks, quotes, cheat sheet</sub></p>
 
-Needs macOS, Python 3.9+, LM Studio (Bionic.app) with its `lms` CLI, and the model:
+## 💡 Why
 
-```bash
-lms get https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit
-cd ~/Code/book-distiller-bot
-./run.sh preflight      # first run creates .venv; checks LM Studio, the model, memory and the folders
-```
+Most book summaries are either too thin to be useful or quietly make things up. This one reads the whole book,
+takes notes chapter by chapter, and keeps a quote only if it really appears in the book, with the page number.
 
-The bot starts the LM Studio server if it is off (and never stops it). LM Studio's model loading guardrails stay on.
+## ⚙️ How it works
 
-**Sharing LM Studio.** The school reminder, PGRS and email bots use the same model, and all of them follow one lease
-protocol (`kit.js` in the Node bots; here `distiller/llm.py`): everyone loads Qwen3.8 with the same profile
-(`--context-length 16384 --parallel 2 --ttl 600`), so whoever needs it reuses what another one loaded, and the last
-one done unloads it. A model a person loaded is never unloaded. Another model that is busy is waited for ("Waiting
-for … to finish", up to 10 min); one left idle for `takeover_idle_minutes` (default 5) is unloaded. If the model
-can't be had (still busy, or the guardrail says it won't fit), the run stops with exit code 75 and keeps its
-progress: run it again later. The TTL unloads the model if every app holding it crashed.
+<table>
+  <tr>
+    <td align="center" width="33%"><h3>📥</h3><b>Drop a book in</b><br><sub>Put a PDF or EPUB in your input folder and double-click <code>run-now.command</code></sub></td>
+    <td align="center" width="33%"><h3>🧠</h3><b>It reads every chapter</b><br><sub>A local AI model takes notes per chapter, checks every quote against the book, then writes and audits the overview</sub></td>
+    <td align="center" width="33%"><h3>📄</h3><b>Get a summary back</b><br><sub>One HTML page in your output folder (20–30 min reads; long books get parts)</sub></td>
+  </tr>
+</table>
 
-## Usage
+Books whose summary is already in the output folder are skipped, so a run only converts what's new. Stop it any
+time; the next run picks up where it left off. You get a Mac notification when a book is done.
+
+## 🚀 Set it up
+
+<table>
+  <tr>
+    <td align="center" width="33%"><b>1 · Choose folders</b><br><sub>Copy <code>.env.example</code> to <code>.env</code> and set your input and output folders (e.g. in Google Drive)</sub></td>
+    <td align="center" width="33%"><b>2 · Check once</b><br><sub><code>./run.sh preflight</code> sets itself up and checks LM Studio and the folders</sub></td>
+    <td align="center" width="33%"><b>3 · Use it</b><br><sub>Drop books in the input folder, double-click <code>run-now.command</code></sub></td>
+  </tr>
+</table>
+
+Needs a Mac with Python 3.9+ and [LM Studio](https://lmstudio.ai) with Qwen3.8 27B.
+
+## 🔒 Private by design
+
+The book and the AI stay on your Mac; nothing is uploaded except through your own Drive sync if your folders are in
+Google Drive. Your folder paths live in `.env` and are never committed.
+
+<details>
+<summary><b>🛠️ For developers</b></summary>
+
+<br>
+
+<p>
+  <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square" alt="Python">
+  <img src="https://img.shields.io/badge/LM%20Studio-Qwen3.8%2027B-5A0FC8?style=flat-square" alt="LM Studio">
+  <img src="https://img.shields.io/badge/PyMuPDF%20%C2%B7%20ebooklib-ingest-000000?style=flat-square" alt="PyMuPDF and ebooklib">
+</p>
+
+The model is shared with the other bots through a lease protocol (`distiller/llm.py`, the same as their `kit.js`):
+loaded once with one profile, reused, unloaded by the last one out; LM Studio's memory guardrail stays on. If it
+can't be had, the run stops with exit code 75 and keeps its progress.
+
+#### Commands
 
 | Command | What it does |
 |---|---|
@@ -54,7 +91,7 @@ You get a macOS notification when a book is done.
 request. Two requests run at once (`parallel: 2`; 4 is faster but makes a 32 GB Mac swap); every synthesis and
 audit call shares one prompt prefix so LM Studio reads the notes once; and the audit returns only corrections.
 
-## Tuning the style
+#### Tuning the style
 
 `style.md` is injected into every writing prompt (chapter notes, synthesis, audit). Edit the reader, tone, depth,
 length and formatting there; its "20–30 minute read" line sets the size of one part. Then:
@@ -66,7 +103,7 @@ length and formatting there; its "20–30 minute read" line sets the size of one
 
 Only `**bold**` and `*italic*` are rendered; the LLM never writes HTML (`templates/summary.html.j2` does the layout).
 
-## How it works (and where to change it)
+#### The pipeline (and where to change it)
 
 Every step saves its result in `work/<book>/` before the next one starts, so a run can stop and resume anywhere,
 and `--from STEP` redoes one step and everything after it.
@@ -89,7 +126,7 @@ and `--from STEP` redoes one step and everything after it.
 streams every response, and retries with a pause. Text calls use Qwen's own prompt format with
 thinking switched off; figure checks use the chat endpoint because they send images.
 
-## Files
+#### Files
 
 ```
 distiller/        the run, one module per step: ingest → chunk → plan → extract → synth → images → render;
@@ -105,7 +142,7 @@ work/<book>/      (gitignored) doc.json, chunks.json, plan.json, notes/, synthes
 ```
 
 
-## When something goes wrong
+#### When something goes wrong
 
 A failed book shows a macOS notification. Details: `work/<book>/run.log` (every step, with the error). `.venv/bin/python -m unittest discover tests` checks the code without the model.
 
@@ -118,6 +155,6 @@ A failed book shows a macOS notification. Details: `work/<book>/run.log` (every 
 - **Odd chapter splits**: check the chunk list at the top of `work/<book>/run.log`, tune `chunk_tokens` /
   `min_chunk_tokens`, then `--from chunk`.
 
-## License
+**License:** MIT.
 
-MIT
+</details>
