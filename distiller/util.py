@@ -177,19 +177,9 @@ def book_dirs(cfg: dict) -> tuple:
 # ---------------------------------------------------------------- notifications
 
 def notify(title: str, message: str) -> None:
-    try:
-        subprocess.run(
-            [
-                "osascript",
-                "-e", "on run argv",
-                "-e", 'display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"',
-                "-e", "end run",
-                str(title),
-                str(message),
-            ],
-            check=False,
-            capture_output=True,
-            timeout=10,
-        )
+    try:  # argv, not string interpolation: titles may contain quotes
+        subprocess.run(["osascript", "-e", "on run argv", "-e",
+                        'display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"',
+                        "-e", "end run", str(title), str(message)], check=False, capture_output=True, timeout=10)
     except Exception:  # notifications are best-effort
         pass

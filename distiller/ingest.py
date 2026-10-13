@@ -100,7 +100,7 @@ def _clean_meta(s: str | None) -> str:
 # ====================================================================== PDF
 
 def load_pdf(path: Path) -> Doc:
-    import fitz
+    import pymupdf as fitz
 
     with fitz.open(path) as d:
         if d.needs_pass:

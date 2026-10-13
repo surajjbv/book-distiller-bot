@@ -173,73 +173,43 @@ def main(argv=None) -> int:
     except KeyboardInterrupt:
         log.error("\nInterrupted. Progress is saved; run the same command again to resume.")
         llm.release()
-        _release_lock()
         os._exit(130)  # don't wait for in-flight requests in worker threads; every saved file is already complete
     finally:
         llm.release()  # free the RAM when done (the last app out unloads the model)
-        _release_lock()
 
 
 def trash(p: Path) -> None:
     """Move a superseded summary to the Trash (recoverable), not a permanent delete."""
     import subprocess
     try:
-        subprocess.run(
-            [
-                "osascript",
-                "-e", "on run argv",
-                "-e", 'tell application "Finder" to delete POSIX file (item 1 of argv)',
-                "-e", "end run",
-                str(p.resolve()),
-            ],
-            check=False,
-            capture_output=True,
-            timeout=10,
-        )
-    except Exception:
-        pass
-    log.info("  moved superseded %s to the Trash", p.name)
+        ok = subprocess.run(["osascript", "-e", "on run argv", "-e", 'tell application "Finder" to delete POSIX file (item 1 of argv)',
+                             "-e", "end run", str(p.resolve())], capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        ok = False
+    if ok:
+        log.info("  moved superseded %s to the Trash", p.name)
+    else:
+        log.warning("  could not move superseded %s to the Trash; delete it yourself", p.name)
 
 
-_LOCK_FILE = None
+_lock = None  # open for the whole run: the OS drops the flock when the process exits, even on a crash
 
 
 def single_instance() -> None:
     """Two runs would summarise the same books twice, so allow only one."""
-    global _LOCK_FILE
+    global _lock
     WORK_DIR.mkdir(exist_ok=True)
+    _lock = open(LOCK_PATH, "a+", encoding="utf-8")
     try:
-        _LOCK_FILE = open(LOCK_PATH, "a+", encoding="utf-8")
-        fcntl.flock(_LOCK_FILE, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (BlockingIOError, OSError):
-        pid = None
-        try:
-            pid = LOCK_PATH.read_text(encoding="utf-8").strip()
-        except Exception:
-            pass
-        pid_msg = f" (pid {pid})" if pid else ""
-        log.error("Another book-distiller-bot run is in progress%s. Wait for it, or stop it first.", pid_msg)
+        fcntl.flock(_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        _lock.seek(0)
+        log.error("Another book-distiller-bot run is in progress (pid %s). Wait for it, or stop it first.",
+                  _lock.read().strip() or "?")
         sys.exit(1)
-    _LOCK_FILE.seek(0)
-    _LOCK_FILE.truncate()
-    _LOCK_FILE.write(f"{os.getpid()}\n")
-    _LOCK_FILE.flush()
-
-
-def _release_lock() -> None:
-    global _LOCK_FILE
-    if _LOCK_FILE:
-        try:
-            fcntl.flock(_LOCK_FILE, fcntl.LOCK_UN)
-            _LOCK_FILE.close()
-        except Exception:
-            pass
-        _LOCK_FILE = None
-    try:
-        if LOCK_PATH.exists() and LOCK_PATH.read_text(encoding="utf-8").strip() == str(os.getpid()):
-            LOCK_PATH.unlink()
-    except Exception:
-        pass
+    _lock.truncate(0)
+    _lock.write(f"{os.getpid()}\n")
+    _lock.flush()
 
 
 def watch(cfg: dict, llm: LMStudio, inp: Path, out: Path) -> int:

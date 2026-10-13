@@ -297,9 +297,8 @@ class LMStudio:
             url, body["messages"] = f"{self.base}/chat/completions", messages
         else:
             url = f"{self.base}/completions"
-            def clean_prompt(c: str) -> str:
-                return str(c).replace("<|im_start|>", "<| im_start |>").replace("<|im_end|>", "<| im_end |>")
-            body["prompt"] = "".join(f"<|im_start|>{m['role']}\n{clean_prompt(m['content'])}<|im_end|>\n" for m in messages) \
+            esc = lambda c: str(c).replace("<|im_start|>", "<| im_start |>").replace("<|im_end|>", "<| im_end |>")  # book text can't end a turn
+            body["prompt"] = "".join(f"<|im_start|>{m['role']}\n{esc(m['content'])}<|im_end|>\n" for m in messages) \
                 + "<|im_start|>assistant\n<think>\n\n</think>\n\n"
             body["stop"] = ["<|im_end|>"]
         with requests.post(url, json=body, stream=True, timeout=(10, int(self.cfg["request_timeout"]))) as r:

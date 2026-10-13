@@ -8,12 +8,12 @@ from pathlib import Path
 
 from PIL import Image
 
-Image.MAX_IMAGE_PIXELS = 50_000_000
-
 from .extract import _obj, text
 from .ingest import Doc
 from .llm import LMStudio
 from .util import log, pmap
+
+Image.MAX_IMAGE_PIXELS = 50_000_000  # refuse decompression bombs
 
 VISION_SCHEMA = _obj(
     kind={"type": "string", "enum": ["diagram", "chart", "table", "infographic", "map", "photo",
@@ -71,7 +71,7 @@ def candidates(doc: Doc, cfg: dict) -> list:
         out.append({"offset": offset, "page": page, "img": img, "area": w * h, "area_frac": area_frac})
 
     if doc.fmt == "pdf":
-        import fitz
+        import pymupdf as fitz
         with fitz.open(doc.path) as d:
             xref_pages: dict = {}
             for page in d:
@@ -137,7 +137,7 @@ def _vector_figure(page, p_area, offset, label, accept) -> None:
     rects = [d["rect"] for d in drawings if d["rect"].width * d["rect"].height < p_area * 0.8]
     if len(rects) < 25:
         return
-    import fitz
+    import pymupdf as fitz
     box = fitz.Rect(rects[0])
     for r in rects[1:]:
         box |= r

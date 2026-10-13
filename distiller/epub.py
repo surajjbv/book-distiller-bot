@@ -20,137 +20,21 @@ def xml_md(s) -> str:
 
 
 EPUB_CSS = """
-@namespace epub "http://www.idpf.org/2007/ops";
-
-body {
-    font-family: "Amazon Ember", "Helvetica Neue", Georgia, serif;
-    margin: 4%;
-    line-height: 1.6;
-    color: #111111;
-    background-color: #ffffff;
-}
-
-h1, h2, h3, h4 {
-    font-weight: 600;
-    line-height: 1.25;
-    margin-top: 1.4em;
-    margin-bottom: 0.5em;
-    page-break-after: avoid;
-    break-after: avoid;
-}
-
-h1 { font-size: 1.7em; border-bottom: 1px solid #333333; padding-bottom: 0.3em; }
-h2 { font-size: 1.35em; border-bottom: 1px solid #cccccc; padding-bottom: 0.2em; }
-h3 { font-size: 1.15em; }
-h4 { font-size: 1.0em; font-style: italic; color: #444444; }
-
-p {
-    margin: 0.6em 0;
-    text-align: justify;
-}
-
-ul, ol {
-    margin: 0.6em 0;
-    padding-left: 1.6em;
-}
-
-li {
-    margin: 0.35em 0;
-}
-
-blockquote {
-    margin: 1.2em 0;
-    padding: 0.6em 1.2em;
-    border-left: 3px solid #555555;
-    background: #f7f7f7;
-    font-style: italic;
-    page-break-inside: avoid;
-    break-inside: avoid;
-}
-
-blockquote .src {
-    display: block;
-    margin-top: 0.5em;
-    font-size: 0.88em;
-    font-style: normal;
-    color: #555555;
-}
-
-.card {
-    border: 1px solid #bbbbbb;
-    border-radius: 6px;
-    padding: 1em 1.2em;
-    margin: 1em 0;
-    background: #fafafa;
-    page-break-inside: avoid;
-    break-inside: avoid;
-}
-
-.core-idea {
-    border-left: 4px solid #111111;
-    padding: 0.8em 1em;
-    margin: 1em 0;
-    background: #f4f4f4;
-    font-weight: 500;
-    page-break-inside: avoid;
-    break-inside: avoid;
-}
-
-.framework, .story {
-    border: 1px solid #cccccc;
-    padding: 0.9em 1.1em;
-    margin: 1em 0;
-    border-radius: 4px;
-    page-break-inside: avoid;
-    break-inside: avoid;
-}
-
-.critique-block {
-    border-left: 3px solid #444444;
-    padding: 0.6em 1em;
-    margin: 0.8em 0;
-    background: #f9f9f9;
-}
-
-figure {
-    margin: 1.5em 0;
-    text-align: center;
-    page-break-inside: avoid;
-    break-inside: avoid;
-}
-
-figure img {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin: 0 auto;
-}
-
-figcaption {
-    font-size: 0.88em;
-    color: #444444;
-    margin-top: 0.6em;
-    font-style: italic;
-    text-align: center;
-}
-
-dl.cheat dt {
-    font-weight: bold;
-    margin-top: 0.8em;
-    color: #111111;
-}
-
-dl.cheat dd {
-    margin-left: 1.2em;
-    margin-bottom: 0.8em;
-    color: #333333;
-}
-
-.meta {
-    font-size: 0.9em;
-    color: #555555;
-    margin-bottom: 1.5em;
-}
+body{font-family:Georgia,serif;margin:4%;line-height:1.6;color:#111;background:#fff}
+h1,h2,h3,h4{font-weight:600;line-height:1.25;margin:1.4em 0 .5em;page-break-after:avoid;break-after:avoid}
+h1{font-size:1.7em;border-bottom:1px solid #333;padding-bottom:.3em} h2{font-size:1.35em;border-bottom:1px solid #ccc;padding-bottom:.2em}
+h3{font-size:1.15em} h4{font-size:1em;font-style:italic;color:#444}
+p{margin:.6em 0} ul,ol{margin:.6em 0;padding-left:1.6em} li{margin:.35em 0}
+blockquote{margin:1.2em 0;padding:.6em 1.2em;border-left:3px solid #555;background:#f7f7f7;font-style:italic}
+blockquote .src{display:block;margin-top:.5em;font-size:.88em;font-style:normal;color:#555}
+.card,.framework,.story{border:1px solid #bbb;border-radius:4px;padding:.9em 1.1em;margin:1em 0}
+.core-idea{border-left:4px solid #111;padding:.8em 1em;margin:1em 0;background:#f4f4f4;font-weight:500}
+.critique-block{border-left:3px solid #444;padding:.6em 1em;margin:.8em 0;background:#f9f9f9}
+blockquote,.card,.framework,.story,.core-idea,figure{page-break-inside:avoid;break-inside:avoid}
+figure{margin:1.5em 0;text-align:center} figure img{max-width:100%;height:auto}
+figcaption{font-size:.88em;color:#444;margin-top:.6em;font-style:italic}
+dl.cheat dt{font-weight:bold;margin-top:.8em} dl.cheat dd{margin:0 0 .8em 1.2em;color:#333}
+.meta{font-size:.9em;color:#555;margin-bottom:1.5em}
 """
 
 
