@@ -56,7 +56,7 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
     data = {}
     if path.exists():
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
             raise DistillerError(f"{path.name}: {e}")
     problems = []
@@ -82,12 +82,12 @@ def read_env(path: Path) -> dict:
     """KEY=value lines of a .env file (no file: empty)."""
     if not path.exists():
         return {}
-    pairs = (line.split("=", 1) for line in path.read_text().splitlines() if re.match(r"\s*[A-Z][A-Z0-9_]*\s*=", line))
+    pairs = (line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if re.match(r"\s*[A-Z][A-Z0-9_]*\s*=", line))
     return {k.strip(): v.strip().strip('"').strip("'") for k, v in pairs}
 
 
 def read_style() -> str:
-    return STYLE_PATH.read_text().strip() if STYLE_PATH.exists() else ""
+    return STYLE_PATH.read_text(encoding="utf-8").strip() if STYLE_PATH.exists() else ""
 
 
 # ---------------------------------------------------------------- logging
@@ -126,9 +126,14 @@ def est_tokens(text: str) -> int:
 
 
 def slugify(s: str, maxlen: int = 60) -> str:
+    raw = s
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
     s = re.sub(r"[^a-zA-Z0-9]+", "-", s).strip("-").lower()
-    return s[:maxlen].strip("-") or "book"
+    slug = s[:maxlen].strip("-")
+    if not slug:
+        h = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
+        return f"book-{h}"
+    return slug
 
 
 def safe_filename(s: str) -> str:
@@ -146,7 +151,7 @@ def sha256_file(path: Path) -> str:
 
 def read_json(path: Path, default=None):
     try:
-        return json.loads(Path(path).read_text())
+        return json.loads(Path(path).read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -155,7 +160,7 @@ def write_json(path: Path, obj) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(obj, indent=2, ensure_ascii=False))
+    tmp.write_text(json.dumps(obj, indent=2, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, path)  # atomic: a crash never leaves a half-written file
 
 
@@ -172,11 +177,19 @@ def book_dirs(cfg: dict) -> tuple:
 # ---------------------------------------------------------------- notifications
 
 def notify(title: str, message: str) -> None:
-    def esc(s: str) -> str:
-        return s.replace("\\", "\\\\").replace('"', '\\"')
     try:
-        subprocess.run(["osascript", "-e",
-                        f'display notification "{esc(message)}" with title "{esc(title)}" sound name "Glass"'],
-                       check=False, capture_output=True, timeout=10)
+        subprocess.run(
+            [
+                "osascript",
+                "-e", "on run argv",
+                "-e", 'display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"',
+                "-e", "end run",
+                str(title),
+                str(message),
+            ],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
     except Exception:  # notifications are best-effort
         pass

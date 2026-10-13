@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import logging
 import os
 import shutil
@@ -14,7 +15,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from .llm import LMStudio, ModelBusy
-from .pipeline import STEPS, BookJob
+from .pipeline import STEPS, BookJob, epub_name
 from .util import (BOOK_EXTS, WORK_DIR, DistillerError, add_file_log, book_dirs,
                    load_config, log, notify, read_json, remove_log, sha256_file, slugify, write_json)
 
@@ -58,22 +59,27 @@ def preflight(cfg: dict, llm: LMStudio) -> tuple:
 
 
 def process(path: Path, cfg: dict, llm: LMStudio, out: Path, force: bool = False, from_step: str | None = None) -> None:
-    sha, index = sha256_file(path), read_json(INDEX_PATH, {})
-    entry = index.get(sha)
-    done = [out / Path(f).name for f in (entry or {}).get("files") or ([entry["output"]] if entry else [])]
-    if done and not (force or from_step) and all(f.exists() for f in done):
-        log.info("✓ %s already summarised → %s  (--force to redo)", path.name, done[0].name)
-        return
-    previous = (entry or {}).get("files") or ([entry["output"]] if entry else [])
-    if entry:  # being redone: an interrupted --force/--from run resumes on a plain re-run
-        write_json(INDEX_PATH, {k: v for k, v in index.items() if k != sha})
-    workdir = WORK_DIR / slugify(path.stem)
-    state = read_json(workdir / "state.json")
-    if workdir.exists() and (force or (state and state.get("sha256") != sha)):
-        shutil.rmtree(workdir)
-    write_json(workdir / "state.json", {"sha256": sha, "source": str(path)})
-    handler = add_file_log(workdir / "run.log")
-    try:
+    handler = None
+    try:  # everything, so a failure anywhere is logged once here (main() only counts it)
+        sha, index = sha256_file(path), read_json(INDEX_PATH, {})
+        entry = index.get(sha)
+        done = [out / Path(f).name for f in (entry or {}).get("files") or ([entry["output"]] if entry else [])]
+        if done and not (force or from_step) and all(f.exists() for f in done if f.suffix != ".epub"):
+            saved = WORK_DIR / slugify(path.stem)
+            if not entry.get("title") or (out / epub_name(entry["title"])).exists() or not all(
+                    (saved / f).exists() for f in ("synthesis.json", "images.json")):
+                log.info("✓ %s already summarised → %s  (--force to redo)", path.name, done[0].name)
+                return
+            log.info("EPUB missing for %s: rebuilding it from saved work (no model needed)", path.name)
+        previous = (entry or {}).get("files") or ([entry["output"]] if entry else [])
+        if entry:  # being redone: an interrupted --force/--from run resumes on a plain re-run
+            write_json(INDEX_PATH, {k: v for k, v in index.items() if k != sha})
+        workdir = WORK_DIR / slugify(path.stem)
+        state = read_json(workdir / "state.json")
+        if workdir.exists() and (force or (state and state.get("sha256") != sha)):
+            shutil.rmtree(workdir)
+        write_json(workdir / "state.json", {"sha256": sha, "source": str(path)})
+        handler = add_file_log(workdir / "run.log")
         log.info("━━ %s", path.name)
         job = BookJob(path, cfg, llm, workdir)
         if from_step:
@@ -84,6 +90,10 @@ def process(path: Path, cfg: dict, llm: LMStudio, out: Path, force: bool = False
             f = out / page["name"]
             f.write_text(page["html"], encoding="utf-8")
             files.append(str(f))
+        if res.get("epub"):
+            ep = out / res["epub"]["name"]
+            ep.write_bytes(res["epub"]["data"])
+            files.append(str(ep))
         log.info("✓ Saved %s in %s", ", ".join(Path(f).name for f in files), out)
         for old in previous:  # an earlier run's files that this run no longer produces (e.g. 1 file -> 2 parts)
             stale = out / Path(old).name
@@ -106,7 +116,8 @@ def process(path: Path, cfg: dict, llm: LMStudio, out: Path, force: bool = False
             notify("book-distiller-bot", f"Failed: {path.name}")
         raise
     finally:
-        remove_log(handler)
+        if handler:
+            remove_log(handler)
 
 
 def main(argv=None) -> int:
@@ -150,7 +161,7 @@ def main(argv=None) -> int:
                 process(b, cfg, llm, out, force=args.force, from_step=args.from_step)
             except ModelBusy:
                 raise
-            except DistillerError:
+            except Exception:  # process() has logged and notified
                 failed += 1
         return 1 if failed else 0
     except ModelBusy as e:
@@ -162,32 +173,73 @@ def main(argv=None) -> int:
     except KeyboardInterrupt:
         log.error("\nInterrupted. Progress is saved; run the same command again to resume.")
         llm.release()
-        LOCK_PATH.unlink(missing_ok=True)
+        _release_lock()
         os._exit(130)  # don't wait for in-flight requests in worker threads; every saved file is already complete
     finally:
         llm.release()  # free the RAM when done (the last app out unloads the model)
-        if LOCK_PATH.exists() and LOCK_PATH.read_text().strip() == str(os.getpid()):
-            LOCK_PATH.unlink()
+        _release_lock()
 
 
 def trash(p: Path) -> None:
     """Move a superseded summary to the Trash (recoverable), not a permanent delete."""
     import subprocess
-    subprocess.run(["osascript", "-e", f'tell application "Finder" to delete POSIX file "{p}"'], capture_output=True)
+    try:
+        subprocess.run(
+            [
+                "osascript",
+                "-e", "on run argv",
+                "-e", 'tell application "Finder" to delete POSIX file (item 1 of argv)',
+                "-e", "end run",
+                str(p.resolve()),
+            ],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+    except Exception:
+        pass
     log.info("  moved superseded %s to the Trash", p.name)
+
+
+_LOCK_FILE = None
 
 
 def single_instance() -> None:
     """Two runs would summarise the same books twice, so allow only one."""
+    global _LOCK_FILE
     WORK_DIR.mkdir(exist_ok=True)
     try:
-        pid = int(LOCK_PATH.read_text())
-        os.kill(pid, 0)
-        log.error("Another book-distiller-bot run is in progress (pid %d). Wait for it, or stop it first.", pid)
+        _LOCK_FILE = open(LOCK_PATH, "a+", encoding="utf-8")
+        fcntl.flock(_LOCK_FILE, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        pid = None
+        try:
+            pid = LOCK_PATH.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+        pid_msg = f" (pid {pid})" if pid else ""
+        log.error("Another book-distiller-bot run is in progress%s. Wait for it, or stop it first.", pid_msg)
         sys.exit(1)
-    except (FileNotFoundError, ValueError, ProcessLookupError):
-        pass  # no lock, or a stale one from a crash
-    LOCK_PATH.write_text(str(os.getpid()))
+    _LOCK_FILE.seek(0)
+    _LOCK_FILE.truncate()
+    _LOCK_FILE.write(f"{os.getpid()}\n")
+    _LOCK_FILE.flush()
+
+
+def _release_lock() -> None:
+    global _LOCK_FILE
+    if _LOCK_FILE:
+        try:
+            fcntl.flock(_LOCK_FILE, fcntl.LOCK_UN)
+            _LOCK_FILE.close()
+        except Exception:
+            pass
+        _LOCK_FILE = None
+    try:
+        if LOCK_PATH.exists() and LOCK_PATH.read_text(encoding="utf-8").strip() == str(os.getpid()):
+            LOCK_PATH.unlink()
+    except Exception:
+        pass
 
 
 def watch(cfg: dict, llm: LMStudio, inp: Path, out: Path) -> int:
@@ -195,7 +247,10 @@ def watch(cfg: dict, llm: LMStudio, inp: Path, out: Path) -> int:
     sizes, handled = {}, set()  # handled: (path, mtime) done/skipped/failed; retried only if the file changes
     while True:
         for b in input_books(inp):
-            st = b.stat()
+            try:
+                st = b.stat()
+            except OSError:
+                continue
             stable = sizes.get(b) == st.st_size and time.time() - st.st_mtime > 5
             sizes[b] = st.st_size
             if stable and (b, st.st_mtime) not in handled:

@@ -102,74 +102,74 @@ def _clean_meta(s: str | None) -> str:
 def load_pdf(path: Path) -> Doc:
     import fitz
 
-    d = fitz.open(path)
-    if d.needs_pass:
-        raise DistillerError(f"{path.name} is password-protected. Remove the password and try again.")
-    flags = (fitz.TEXTFLAGS_TEXT & ~fitz.TEXT_PRESERVE_LIGATURES) | fitz.TEXT_DEHYPHENATE
-    n = len(d)
+    with fitz.open(path) as d:
+        if d.needs_pass:
+            raise DistillerError(f"{path.name} is password-protected. Remove the password and try again.")
+        flags = (fitz.TEXTFLAGS_TEXT & ~fitz.TEXT_PRESERVE_LIGATURES) | fitz.TEXT_DEHYPHENATE
+        n = len(d)
 
-    # Pass 1: blocks per page, and find running headers/footers to drop.
-    page_blocks = []
-    edge_counts: Counter = Counter()
-    for page in d:
-        h = page.rect.height or 1
-        blocks = []
-        for b in page.get_text("blocks", flags=flags):
-            if b[6] != 0:
-                continue
-            txt = re.sub(r"\s*\n\s*", " ", b[4]).strip()
-            if not txt:
-                continue
-            edge = b[1] < h * 0.08 or b[3] > h * 0.92
-            key = re.sub(r"\d+", "#", txt.lower()) if edge else None
-            if key:
-                edge_counts[key] += 1
-            blocks.append((txt, key))
-        page_blocks.append(blocks)
-    running = {k for k, c in edge_counts.items() if c >= max(3, n * 0.2)}
+        # Pass 1: blocks per page, and find running headers/footers to drop.
+        page_blocks = []
+        edge_counts: Counter = Counter()
+        for page in d:
+            h = page.rect.height or 1
+            blocks = []
+            for b in page.get_text("blocks", flags=flags):
+                if b[6] != 0:
+                    continue
+                txt = re.sub(r"\s*\n\s*", " ", b[4]).strip()
+                if not txt:
+                    continue
+                edge = b[1] < h * 0.08 or b[3] > h * 0.92
+                key = re.sub(r"\d+", "#", txt.lower()) if edge else None
+                if key:
+                    edge_counts[key] += 1
+                blocks.append((txt, key))
+            page_blocks.append(blocks)
+        running = {k for k, c in edge_counts.items() if c >= max(3, n * 0.2)}
 
-    # Printed page labels (e.g. roman numerals for front matter) when they look sane, else physical numbers.
-    labels = [d[i].get_label() for i in range(n)]
-    if not all(labels) or len(set(labels)) < n * 0.95:
-        labels = [str(i + 1) for i in range(n)]
+        # Printed page labels (e.g. roman numerals for front matter) when they look sane, else physical numbers.
+        labels = [d[i].get_label() for i in range(n)]
+        if not all(labels) or len(set(labels)) < n * 0.95:
+            labels = [str(i + 1) for i in range(n)]
 
-    parts, pages, off = [], [], 0
-    for i, blocks in enumerate(page_blocks):
-        kept = [t for t, k in blocks if k not in running and not re.fullmatch(r"[\divxlcIVXLC]{1,6}", t)]
-        page_text = "\n\n".join(kept)
-        pages.append([off, labels[i]])
-        parts.append(page_text)
-        off += len(page_text) + 2
-    text = "\n\n".join(parts)
+        parts, pages, off = [], [], 0
+        for i, blocks in enumerate(page_blocks):
+            kept = [t for t, k in blocks if k not in running and not re.fullmatch(r"[\divxlcIVXLC]{1,6}", t)]
+            page_text = "\n\n".join(kept)
+            pages.append([off, labels[i]])
+            parts.append(page_text)
+            off += len(page_text) + 2
+        text = "\n\n".join(parts)
 
-    chars = sum(len(p) for p in parts)
-    if chars < max(200, n * 40):
-        raise DistillerError(
-            f"{path.name} has no usable text layer (looks scanned: {chars} chars over {n} pages).\n"
-            f"  Fix: OCR it first, e.g.  brew install ocrmypdf && ocrmypdf --skip-text \"{path}\" \"{path.with_stem(path.stem + '-ocr')}\"\n"
-            "  then drop the OCR'd PDF into input/.")
-    empty = sum(1 for p in parts if len(p) < 20)
-    if empty > n * 0.5:
-        log.warning("%d of %d pages have no text; parts of this PDF may be scanned images (consider ocrmypdf).", empty, n)
+        chars = sum(len(p) for p in parts)
+        if chars < max(200, n * 40):
+            raise DistillerError(
+                f"{path.name} has no usable text layer (looks scanned: {chars} chars over {n} pages).\n"
+                f"  Fix: OCR it first, e.g.  brew install ocrmypdf && ocrmypdf --skip-text \"{path}\" \"{path.with_stem(path.stem + '-ocr')}\"\n"
+                "  then drop the OCR'd PDF into input/.")
+        empty = sum(1 for p in parts if len(p) < 20)
+        if empty > n * 0.5:
+            log.warning("%d of %d pages have no text; parts of this PDF may be scanned images (consider ocrmypdf).", empty, n)
 
-    meta = d.metadata or {}
-    doc = Doc(path=str(path), fmt="pdf", title=_clean_meta(meta.get("title")) or _pretty_stem(path),
-              author=_clean_meta(meta.get("author")), text=text, pages=pages)
+        meta = d.metadata or {}
+        doc = Doc(path=str(path), fmt="pdf", title=_clean_meta(meta.get("title")) or _pretty_stem(path),
+                  author=_clean_meta(meta.get("author")), text=text, pages=pages)
 
-    def offset_for(page_idx: int, title: str) -> int:
-        start = pages[page_idx][0]
-        pat = _title_pattern(title)
-        m = pat.search(parts[page_idx]) if pat else None
-        return start + (m.start() if m else 0)
+        def offset_for(page_idx: int, title: str) -> int:
+            start = pages[page_idx][0]
+            pat = _title_pattern(title)
+            m = pat.search(parts[page_idx]) if pat else None
+            return start + (m.start() if m else 0)
 
-    toc = [t for t in d.get_toc(simple=True) if 1 <= t[2] <= n]
-    if len(toc) >= 3:
-        doc.headings = [Heading(offset_for(p - 1, t), t.strip(), lvl, "toc") for lvl, t, p in toc]
-        doc.heading_source = "pdf-toc"
-    else:
-        doc.headings = _pdf_font_headings(d, flags, offset_for)
-        doc.heading_source = "pdf-headings" if doc.headings else ""
-    return doc
+        toc = [t for t in d.get_toc(simple=True) if 1 <= t[2] <= n]
+        if len(toc) >= 3:
+            doc.headings = [Heading(offset_for(p - 1, t), t.strip(), lvl, "toc") for lvl, t, p in toc]
+            doc.heading_source = "pdf-toc"
+        else:
+            doc.headings = _pdf_font_headings(d, flags, offset_for)
+            doc.heading_source = "pdf-headings" if doc.headings else ""
+        return doc
 
 
 CHAPTER_RE = re.compile(

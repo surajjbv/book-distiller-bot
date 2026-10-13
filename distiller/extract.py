@@ -143,12 +143,18 @@ def verify_quotes(doc: Doc, c: Chunk, note: dict, threshold: int) -> tuple:
                 stats["dropped"].append(raw)
                 continue
             a, b, score = al.dest_start, al.dest_end, al.score
+        if not (0 <= a < b <= len(idx)):
+            stats["dropped"].append(raw)
+            continue
         oa, ob = idx[a], idx[b - 1] + 1
         # widen to whole words
         while oa > 0 and src[oa - 1].isalnum():
             oa -= 1
         while ob < len(src) and src[ob].isalnum():
             ob += 1
+        if oa >= ob:
+            stats["dropped"].append(raw)
+            continue
         text = re.sub(r"\s+", " ", src[oa:ob]).strip()
         if text.lower() in seen:
             continue

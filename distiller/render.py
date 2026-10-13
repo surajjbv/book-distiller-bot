@@ -12,15 +12,17 @@ from .util import TEMPLATE_DIR
 
 
 def inline_md(s) -> Markup:
-    """Escape, then allow **bold** / *italic* only."""
+    """Escape, then allow **bold** / *italic* / _italic_ only (snake_case stays as is). Also valid XHTML (EPUB)."""
     t = str(escape(s or ""))
     t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
     t = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?!\w)", r"<em>\1</em>", t)
+    t = re.sub(r"(?<!\w)_(?![\s_])(.+?)(?<![\s_])_(?!\w)", r"<em>\1</em>", t)
     return Markup(t)
 
 
 def strip_md(s) -> str:
-    return re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", s or "")
+    s = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", s or "")
+    return re.sub(r"(?<!\w)_(?![\s_])(.+?)(?<![\s_])_(?!\w)", r"\1", s)
 
 
 def chapter_links(refs, hrefs: dict) -> Markup:
@@ -29,11 +31,15 @@ def chapter_links(refs, hrefs: dict) -> Markup:
         refs = [refs]
     out = []
     for r in refs or []:
-        nums = [int(n) for n in re.findall(r"\d+", str(r))]
-        m = re.search(r"(\d+)\s*[–-]\s*(\d+)", str(r))
-        if m:
-            nums = list(range(int(m.group(1)), int(m.group(2)) + 1))
-        links = [f'<a class="ref" href="{hrefs[n]}#ch-{n}">Ch {n}</a>' for n in nums if n in hrefs]
+        ranges = re.findall(r"(\d+)\s*[–-]\s*(\d+)", str(r))
+        range_nums = set()
+        for start_s, end_s in ranges:
+            start, end = int(start_s), int(end_s)
+            if start <= end:
+                range_nums.update(range(start, end + 1))
+        all_singles = [int(n) for n in re.findall(r"\d+", str(r))]
+        combined = sorted(range_nums.union(all_singles))
+        links = [f'<a class="ref" href="{hrefs[n]}#ch-{n}">Ch {n}</a>' for n in combined if n in hrefs]
         out.append(" ".join(links) if links else f'<span class="ref">{escape(r)}</span>')
     return Markup(" ".join(out))
 
@@ -71,5 +77,6 @@ def word_count(ctx: dict) -> int:
 
 def render_summary(ctx: dict) -> str:
     e = env()
-    e.globals["chapter_links"] = lambda refs: chapter_links(refs, ctx["chapter_href"])
+    chapter_href = ctx.get("chapter_href", {})
+    e.globals["chapter_links"] = lambda refs: chapter_links(refs, chapter_href)
     return e.get_template("summary.html.j2").render(**ctx)

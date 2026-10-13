@@ -8,6 +8,8 @@ from pathlib import Path
 
 from PIL import Image
 
+Image.MAX_IMAGE_PIXELS = 50_000_000
+
 from .extract import _obj, text
 from .ingest import Doc
 from .llm import LMStudio
@@ -70,39 +72,42 @@ def candidates(doc: Doc, cfg: dict) -> list:
 
     if doc.fmt == "pdf":
         import fitz
-        d = fitz.open(doc.path)
-        xref_pages: dict = {}
-        for page in d:
-            for im in page.get_images(full=True):
-                xref_pages.setdefault(im[0], set()).add(page.number)
-        for page in d:
-            p_area = page.rect.width * page.rect.height or 1
-            offset = doc.pages[page.number][0] if page.number < len(doc.pages) else 0
-            label = doc.pages[page.number][1] if page.number < len(doc.pages) else str(page.number + 1)
-            for im in page.get_images(full=True):
-                xref = im[0]
-                if len(xref_pages[xref]) > 2:  # logos, ornaments, backgrounds repeated across pages
-                    continue
-                rects = page.get_image_rects(xref)
-                shown = max((r.width * r.height for r in rects), default=0) / p_area
-                if shown and shown < 0.04:
-                    continue
-                try:
-                    info = d.extract_image(xref)
-                    pix = None
-                    if info.get("smask") or info.get("colorspace", 3) not in (1, 3):
-                        pix = fitz.Pixmap(d, xref)
-                        if pix.alpha or pix.n - pix.alpha > 3:
-                            pix = fitz.Pixmap(fitz.csRGB, pix)
-                        img = Image.open(io.BytesIO(pix.tobytes("png")))
-                    else:
-                        img = Image.open(io.BytesIO(info["image"]))
-                    img.load()
-                except Exception as e:
-                    log.debug("image xref %s on p.%s unreadable: %s", xref, label, e)
-                    continue
-                accept(img, offset, label, shown)
-            _vector_figure(page, p_area, offset, label, accept)
+        with fitz.open(doc.path) as d:
+            xref_pages: dict = {}
+            for page in d:
+                for im in page.get_images(full=True):
+                    xref_pages.setdefault(im[0], set()).add(page.number)
+            for page in d:
+                p_area = page.rect.width * page.rect.height or 1
+                offset = doc.pages[page.number][0] if page.number < len(doc.pages) else 0
+                label = doc.pages[page.number][1] if page.number < len(doc.pages) else str(page.number + 1)
+                for im in page.get_images(full=True):
+                    xref = im[0]
+                    if len(xref_pages[xref]) > 2:  # logos, ornaments, backgrounds repeated across pages
+                        continue
+                    rects = page.get_image_rects(xref)
+                    shown = max((r.width * r.height for r in rects), default=0) / p_area
+                    if shown and shown < 0.04:
+                        continue
+                    try:
+                        info = d.extract_image(xref)
+                        if info.get("smask") or info.get("colorspace", 3) not in (1, 3):
+                            pix = fitz.Pixmap(d, xref)
+                            if pix.alpha or pix.n - pix.alpha > 3:
+                                pix_rgb = fitz.Pixmap(fitz.csRGB, pix)
+                                img = Image.open(io.BytesIO(pix_rgb.tobytes("png")))
+                                del pix_rgb
+                            else:
+                                img = Image.open(io.BytesIO(pix.tobytes("png")))
+                            del pix
+                        else:
+                            img = Image.open(io.BytesIO(info["image"]))
+                        img.load()
+                    except Exception as e:
+                        log.debug("image xref %s on p.%s unreadable: %s", xref, label, e)
+                        continue
+                    accept(img, offset, label, shown)
+                _vector_figure(page, p_area, offset, label, accept)
     else:
         from ebooklib import epub
         book = epub.read_epub(doc.path, {"ignore_ncx": True})
@@ -139,7 +144,9 @@ def _vector_figure(page, p_area, offset, label, accept) -> None:
     frac = box.width * box.height / p_area
     if 0.08 <= frac <= 0.9:
         pix = page.get_pixmap(clip=box, dpi=150)
-        accept(Image.open(io.BytesIO(pix.tobytes("png"))), offset, label, frac)
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+        del pix
+        accept(img, offset, label, frac)
 
 
 def chunk_for_offset(chunks: list, offset: int):
@@ -179,7 +186,6 @@ def process_images(doc: Doc, chunks: list, notes: dict, cfg: dict, llm: LMStudio
         except Exception as e:
             log.warning("Figure on p.%s skipped: %s", c["page"], e)
             v = {"meaningful": False}
-        tick(0.25)
         keep = v["meaningful"] and (v["kind"] in KEEP_KINDS or (v["kind"] in ("photo", "illustration") and v["importance"] >= 8))
         return dict(c, chunk=ch.index, chapter=ch.title, caption=v["caption"], kind=v["kind"], importance=v["importance"]) if keep else None
 

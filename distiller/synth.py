@@ -96,29 +96,40 @@ def apply_fixes(draft: dict, fixes: list) -> tuple:
     """Apply the audit's corrections. Invalid fixes are skipped. Returns (summary, applied fixes)."""
     out, applied = json.loads(json.dumps(draft)), []
     order = {"replace": 0, "remove": 1, "add": 2}  # removals go from the end so indexes stay valid
-    for f in sorted(fixes, key=lambda f: (order[f["action"]], -f["index"])):
+    for f in sorted(fixes, key=lambda f: (order.get(f.get("action"), 9), -f.get("index", 0))):
+        if not isinstance(f, dict) or "field" not in f or "action" not in f:
+            continue
         box, key = _field(out, f["field"])
         try:
             if f["field"] in TEXT_FIELDS:
-                if f["action"] != "replace" or not f["value"]:
+                if f["action"] != "replace" or not f.get("value"):
                     continue
-                box[key] = f["value"]
+                box[key] = str(f["value"])
             else:
                 items, schema = box.setdefault(key, []), _item_schema(f["field"])
                 value = None
                 if f["action"] != "remove":
-                    value = f["value"] if schema.get("type") == "string" else json.loads(f["value"])
+                    val = f.get("value", "")
+                    if schema.get("type") == "string":
+                        value = str(val)
+                    elif isinstance(val, (dict, list)):
+                        value = val
+                    else:
+                        try:
+                            value = json.loads(val)
+                        except (json.JSONDecodeError, TypeError):
+                            continue
                     jsonschema.validate(value, schema)
                 if f["action"] == "add":
                     items.append(value)
-                elif 0 <= f["index"] < len(items):
+                elif 0 <= f.get("index", -1) < len(items):
                     if f["action"] == "remove":
                         items.pop(f["index"])
                     else:
                         items[f["index"]] = value
                 else:
                     continue
-        except (json.JSONDecodeError, jsonschema.ValidationError, TypeError):
+        except (json.JSONDecodeError, jsonschema.ValidationError, TypeError, KeyError):
             continue
         applied.append(f)
     return out, applied
@@ -179,7 +190,17 @@ class Synthesizer:
 
             texts, labels = map(list, zip(*pmap(condense, list(enumerate(groups, 1)), self.parallel)))
         text = "\n\n".join(texts)
-        return text[: int(self.budget * 3.6)]
+        if est_tokens(text) > self.budget:
+            paras = text.split("\n\n")
+            trimmed = []
+            for p in paras:
+                if est_tokens("\n\n".join(trimmed + [p])) <= self.budget:
+                    trimmed.append(p)
+                else:
+                    break
+            if trimmed:
+                return "\n\n".join(trimmed)
+        return text
 
     # ------------------------------------------------------------ synthesis + audit
 
@@ -197,7 +218,7 @@ class Synthesizer:
             d = self.llm.chat_json([{"role": "system", "content": SYSTEM},
                                     {"role": "user", "content": prefix + ctx + task + limit}], schema, f"synthesis_{part}")
             write_json(path, d)
-            self.tick(1)
+        self.tick(1)
         return d
 
     def run(self, notes: list) -> tuple:
@@ -225,7 +246,7 @@ problem (one line), value (the new text; for lists of objects, the complete item
 No fixes needed -> {{"fixes": []}}. Fix only real problems; do not rewrite what is already right."""}],
                 FIX_SCHEMA, "audit", max_tokens=2000)["fixes"]
             write_json(path, fixes)
-            self.tick(1)
+        self.tick(1)
         final, applied = apply_fixes(draft, fixes)
         log.info("Audit: %d fix(es) proposed, %d applied", len(fixes), len(applied))
         return final, applied

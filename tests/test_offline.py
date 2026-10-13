@@ -1,5 +1,11 @@
 """Offline tests (no LLM): run with  .venv/bin/python -m unittest discover tests"""
+import sys
 import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from distiller.chunk import Chunk, _split_spans, classify, looks_like_index_or_notes, trim_index_tail
 from distiller.extract import verify_quotes
@@ -125,10 +131,6 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(part_minutes("no length here"), 30)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class FakeLLM:
     """Stands in for LM Studio: returns minimal schema-shaped objects."""
     model = "fake"
@@ -205,10 +207,6 @@ class SynthTests(unittest.TestCase):
         self.assertEqual(draft["tldr"], ["a", "b", "c"])  # draft untouched
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class PmapTests(unittest.TestCase):
     def test_first_error_cancels_queued_work(self):
         import time
@@ -230,3 +228,126 @@ class PmapTests(unittest.TestCase):
     def test_order_preserved(self):
         from distiller.util import pmap
         self.assertEqual(pmap(lambda x: x * x, [3, 1, 2], 2), [9, 1, 4])
+
+
+class HardeningTests(unittest.TestCase):
+    def test_chapter_links_multiple_and_range(self):
+        html = str(chapter_links(["Ch 3–5 and Ch 8"], {3: "", 4: "", 5: "", 8: "p2.html"}))
+        self.assertIn('href="#ch-3"', html)
+        self.assertIn('href="#ch-4"', html)
+        self.assertIn('href="#ch-5"', html)
+        self.assertIn('href="p2.html#ch-8"', html)
+
+    def test_slugify_non_latin(self):
+        from distiller.util import slugify
+        s1 = slugify("孙子兵法")
+        s2 = slugify("كتاب الفلسفة")
+        self.assertTrue(s1.startswith("book-"))
+        self.assertTrue(s2.startswith("book-"))
+        self.assertNotEqual(s1, s2)
+
+    def test_progress_bar_deterministic_total(self):
+        import tempfile
+        from unittest.mock import MagicMock, patch
+        from distiller.pipeline import BookJob
+        with tempfile.TemporaryDirectory() as d:
+            wdir = Path(d)
+            chunks = [Chunk(index=1, title="c1", kind="chapter", start=0, end=100, tokens=50),
+                      Chunk(index=2, title="c2", kind="chapter", start=100, end=200, tokens=50)]
+            doc = make_doc()
+            mock_llm = MagicMock()
+            mock_llm.model = "mock-model"
+            job = BookJob(Path("dummy.pdf"), {"parallel": 1, "quote_match_threshold": 90}, mock_llm, wdir)
+            job.load = MagicMock(return_value=(doc, chunks))
+            job.plan = MagicMock(return_value={"minutes": 30, "parts": 1, "reason": "ok"})
+            job.render = MagicMock(return_value=[{"path": wdir / "index.html", "words": 100}])
+
+            from tqdm import tqdm as real_tqdm
+            bars = []
+            def make_bar(*args, **kwargs):
+                b = real_tqdm(*args, **kwargs)
+                bars.append(b)
+                return b
+
+            with patch("distiller.pipeline.tqdm", side_effect=make_bar), \
+                 patch("distiller.pipeline.extract_chunk", return_value={"quotes": []}), \
+                 patch("distiller.pipeline.Synthesizer") as mock_synth, \
+                 patch("distiller.pipeline.process_images", return_value=[]):
+                def synth_run(notes):
+                    job.tick(1)
+                    job.tick(1)
+                    job.tick(1)
+                    job.tick(1)
+                    return {"tldr": []}, []
+                mock_synth.return_value.run.side_effect = synth_run
+
+                # Cold run
+                job.run()
+                self.assertEqual(bars[0].total, len(chunks) + 8)
+                self.assertEqual(bars[0].n, bars[0].total)
+
+                # Cached re-run
+                job.run()
+                self.assertEqual(bars[1].total, len(chunks) + 8)
+                self.assertEqual(bars[1].n, bars[1].total)
+
+    def test_epub_renders_every_schema_field_once_and_is_well_formed(self):
+        import io
+        import tempfile
+        import zipfile
+        from lxml import etree
+        from distiller.epub import build_epub
+        from distiller.extract import note_schema
+        from distiller.synth import SUMMARY_SCHEMA
+
+        def sample(schema, path):  # one instance of the schema, every leaf string unique and traceable
+            if schema.get("type") == "object":
+                return {k: sample(v, f"{path}-{k}") for k, v in schema["properties"].items()}
+            if schema.get("type") == "array":
+                return [sample(schema["items"], f"{path}-{i}") for i in range(2)]
+            return f"V{path}"
+
+        def leaves(obj, skip=("chapters",)):
+            if isinstance(obj, dict):
+                return [x for k, v in obj.items() if k not in skip for x in leaves(v, skip)]
+            if isinstance(obj, list):
+                return [x for v in obj for x in leaves(v, skip)]
+            return [obj]
+
+        note, synth = sample(note_schema(600), "n"), sample(SUMMARY_SCHEMA, "s")
+        notes = {1: dict(note, _pages="pp. 1–10")}
+        chunks = [Chunk(index=1, title="Chapter One", kind="chapter", start=0, end=100, tokens=50)]
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "images").mkdir()
+            (Path(d) / "images" / "fig_01.png").write_bytes(b"png")
+            figures = [{"file": "fig_01.png", "mime": "image/png", "page": "3", "chunk": 1, "caption": "A chart"}]
+            data = build_epub(make_doc(), chunks, notes, {"synthesis": synth}, figures, 20, Path(d))
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            pages = {n: z.read(n) for n in z.namelist() if n.endswith(".xhtml")}
+        for n, b in pages.items():
+            etree.fromstring(b)  # well-formed XHTML, or this raises
+        text = "".join(b.decode() for b in pages.values())
+        missing = [v for v in leaves(note) + leaves(synth) if v not in text]
+        self.assertEqual(missing, [])
+        self.assertEqual(text.count('src="images/fig_01.png"'), 1)
+        self.assertIn("~20 min read", text)
+
+    def test_underscore_italics(self):
+        self.assertEqual(str(inline_md("is _what he thinks,_ so")), "is <em>what he thinks,</em> so")
+        self.assertEqual(str(inline_md("snake_case_name")), "snake_case_name")
+
+    def test_lease_lock_dir_stays_empty(self):
+        import tempfile
+        from distiller import llm
+        d = Path(tempfile.mkdtemp())
+        old = llm.LEASE_DIR, llm.LOCK
+        llm.LEASE_DIR, llm.LOCK = d, d / "lock"
+        try:
+            with llm._locked():
+                self.assertEqual(list((d / "lock").iterdir()), [])  # other bots break a stale lock with rmdir
+            self.assertFalse((d / "lock").exists())
+        finally:
+            llm.LEASE_DIR, llm.LOCK = old
+
+if __name__ == "__main__":
+    unittest.main()

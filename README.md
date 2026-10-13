@@ -32,7 +32,7 @@ takes notes chapter by chapter, and keeps a quote only if it really appears in t
   <tr>
     <td align="center" width="33%"><h3>📥</h3><b>Drop a book in</b><br><sub>Put a PDF or EPUB in your input folder and double-click <code>run-now.command</code></sub></td>
     <td align="center" width="33%"><h3>🧠</h3><b>It reads every chapter</b><br><sub>A local AI model takes notes per chapter, checks every quote against the book, then writes and audits the overview</sub></td>
-    <td align="center" width="33%"><h3>📄</h3><b>Get a summary back</b><br><sub>One HTML page in your output folder (20–30 min reads; long books get parts)</sub></td>
+    <td align="center" width="33%"><h3>📄</h3><b>Get a summary back</b><br><sub>An HTML page (20–30 min reads; long books get parts) and an EPUB for Kindle Scribe or any e-reader</sub></td>
   </tr>
 </table>
 
@@ -101,7 +101,7 @@ length and formatting there; its "20–30 minute read" line sets the size of one
 ./run.sh <book> --from extract      # redo the chapter notes too
 ```
 
-Only `**bold**` and `*italic*` are rendered; the LLM never writes HTML (`templates/summary.html.j2` does the layout).
+Only `**bold**`, `*italic*` and `_italic_` are rendered; the LLM never writes HTML (`templates/summary.html.j2` does the layout).
 
 #### The pipeline (and where to change it)
 
@@ -119,8 +119,8 @@ and `--from STEP` redoes one step and everything after it.
 | 7 | **Synthesize** | Whole-book overview in three calls: (a) TL;DR, core thesis, themes; then in parallel (b) frameworks, key stories and (c) takeaways, critique, cheat sheet. Notes too big for the context are condensed in groups first. | `synth.py` → `PARTS` (prompts and schemas), `Synthesizer.run()` | `style.md`; `SYNTH_MAX` in `plan.py` |
 | 8 | **Audit** | One call checks the overview against the notes and returns only fixes (replace / remove / add) for unsupported claims, contradictions, gaps or wrong chapter refs. Fixes are validated, applied, and listed at the bottom of Part 1. | `synth.py` → audit prompt in `run()`, `apply_fixes()` | — |
 | 9 | **Figures** | Pulls images and vector charts, drops small, odd-shaped, repeated and duplicate ones; the model keeps only diagrams, charts and tables and captions them. | `images.py` → `candidates()`, `process_images()` | `image_cap`, `image_candidates`, `min_image_px` |
-| 10 | **Render** | Splits chapters into the planned parts (book order, similar length; Part 1 also holds the overview) and writes one HTML file per part in the RTI-dashboard style, with links between parts. The model never writes HTML. | `pipeline.py` → `render()`; `plan.py` → `split_parts()`; `templates/summary.html.j2` | the template |
-| 11 | **Save** | Writes `<Title> – Summary.html` (or `… (Part 1 of 3).html` …) into the output folder, moves superseded files from an earlier run to the Trash, sends a notification. | `cli.py` → `process()` | `output_dir`, `notify` |
+| 10 | **Render** | Splits chapters into the planned parts (book order, similar length; Part 1 also holds the overview) and writes one HTML file per part in the RTI-dashboard style, with links between parts, font-size buttons, light/dark, and a black-and-white look for print and e-ink. Then one EPUB of the whole summary. The model never writes HTML. | `pipeline.py` → `render()`; `plan.py` → `split_parts()`; `templates/summary.html.j2`; `epub.py` | the template |
+| 11 | **Save** | Writes `<Title> – Summary.html` (or `… (Part 1 of 3).html` …) and `<Title> – Summary.epub` into the output folder (a missing EPUB is rebuilt from saved work on the next run, without the model), moves superseded files from an earlier run to the Trash, sends a notification. | `cli.py` → `process()` | `output_dir`, `notify` |
 
 **Model calls** go through `llm.py`: it takes Qwen3.8 through the lease protocol (shared with the other bots),
 streams every response, and retries with a pause. Text calls use Qwen's own prompt format with
@@ -130,7 +130,7 @@ thinking switched off; figure checks use the chat endpoint because they send ima
 
 ```
 distiller/        the run, one module per step: ingest → chunk → plan → extract → synth → images → render;
-                  pipeline (steps, resume), cli (commands, folders), llm (model sharing, requests), util
+                  pipeline (steps, resume), epub (e-reader copy), cli (commands, folders), llm (model sharing, requests), util
 templates/        summary.html.j2 (the page layout)
 tests/            test_offline.py (chunking, quotes, rendering) · test_lease.py (model sharing, config)
 style.md          the voice of your summaries      config.json   settings (validated on load)   .env / .env.example  your input and output folders

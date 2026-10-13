@@ -16,6 +16,7 @@ from tqdm import tqdm
 from . import chunk as chunking
 from . import ingest
 from .extract import extract_chunk, verify_quotes
+from .epub import build_epub
 from .images import process_images
 from .llm import LMStudio, tidy
 from .plan import WPM, budgets, plan_book, split_parts
@@ -45,17 +46,15 @@ class BookJob:
                     p.unlink()
         log.info("Redoing from step '%s'", step)
 
-    def tick(self, n: float = 1) -> None:
+    def tick(self, n: int = 1) -> None:
         if self.bar is not None:
-            if self.bar.n + n > self.bar.total:
-                self.bar.total = self.bar.n + n + 1
             self.bar.update(n)
 
     # ------------------------------------------------------------ steps
 
     def load(self):
         d, c = read_json(self.dir / "doc.json"), read_json(self.dir / "chunks.json")
-        if d and c is not None:
+        if d is not None and c is not None:
             return ingest.Doc.from_json(d), chunking.chunks_from_json(c)
         doc = ingest.load(self.path)
         chunks = chunking.build_chunks(doc, self.cfg)
@@ -86,7 +85,7 @@ class BookJob:
                        "notes": extract_chunk(self.llm, doc, c, len(chunks), self.style, words)}
                 write_json(p, rec)
                 log.debug("chunk %d extracted in %.0fs", c.index, time.time() - t)
-                self.tick(1)
+            self.tick(1)
             return c.index, rec["notes"]
 
         return dict(pmap(one, sorted(chunks, key=lambda c: -c.tokens), self.parallel))  # largest first: slots finish together
@@ -111,34 +110,48 @@ class BookJob:
     def run(self) -> dict:
         t0 = time.time()
         doc, chunks = self.load()
-        done = sum((self.dir / "notes" / f"{c.index:02d}.json").exists() for c in chunks)
-        done += len(list((self.dir / "synthesis").glob("draft_*.json"))) + (self.dir / "synthesis" / "audit.json").exists()
-        self.bar = tqdm(total=len(chunks) + 6, initial=done, unit="step", dynamic_ncols=True, desc=doc.title[:30],
+        self.bar = tqdm(total=len(chunks) + 8, unit="step", dynamic_ncols=True, desc=doc.title[:30],
                         bar_format="{desc}: {percentage:3.0f}%|{bar}| {n:.0f}/{total:.0f} [{elapsed}<{remaining}]")
+        pages = []
         try:
             plan = self.plan(doc, chunks)
+            self.tick(1)
             chunk_words, synth_words = budgets(plan, chunks)
             notes, qreport = self.verify(doc, chunks, self.extract(doc, chunks, chunk_words))
+            self.tick(1)
             synth = read_json(self.dir / "synthesis.json")
             if synth is None:
                 final, fixes = Synthesizer(self.llm, self.cfg, self.style, doc.title, doc.author, self.dir,
                                            words=synth_words, tick=self.tick).run([notes[c.index] for c in chunks])
                 synth = {"synthesis": final, "audit_fixes": fixes}
                 write_json(self.dir / "synthesis.json", synth)
+            else:
+                self.tick(4)
             figures = read_json(self.dir / "images.json")
             if figures is None:
-                figures = process_images(doc, chunks, notes, self.cfg, self.llm, self.dir / "images", tick=self.tick)
+                figures = process_images(doc, chunks, notes, self.cfg, self.llm, self.dir / "images")
                 write_json(self.dir / "images.json", figures)
             self.tick(1)
+            pages = self.render(doc, chunks, notes, synth, figures, qreport, plan)
+            epub_info = None
+            try:
+                minutes = math.ceil(sum(p["words"] for p in pages) / WPM)
+                epub_info = {"name": epub_name(doc.title),
+                             "data": build_epub(doc, chunks, notes, synth, figures, minutes, self.dir)}
+            except Exception as e:
+                log.warning("EPUB generation skipped: %s", e)
+            self.tick(1)
+            if self.bar is not None and self.bar.n < self.bar.total:
+                self.bar.update(self.bar.total - self.bar.n)
         finally:
-            self.bar.close()
-            self.bar = None
+            if self.bar is not None:
+                self.bar.close()
+                self.bar = None
 
-        pages = self.render(doc, chunks, notes, synth, figures, qreport, plan)
         words = sum(p["words"] for p in pages)
         log.info("Rendered %d part(s), %s words (~%d min read) in %.0fs · %s", len(pages), f"{words:,}",
                  math.ceil(words / WPM), time.time() - t0, self.llm.stats())
-        return {"title": doc.title, "pages": pages, "read_minutes": math.ceil(words / WPM)}
+        return {"title": doc.title, "pages": pages, "epub": epub_info, "read_minutes": math.ceil(words / WPM)}
 
     def render(self, doc, chunks, notes, synth, figures, qreport, plan) -> list:
         """One HTML page per part. Part 1 carries the whole-book overview; chapters follow in book order."""
@@ -165,6 +178,10 @@ class BookJob:
         n = max(part_of.values())
         names = [output_name(doc.title, k, n) for k in range(1, n + 1)]
         pages = []
+        empty_book = {
+            key: ("" if isinstance(val, str) else {} if isinstance(val, dict) else [])
+            for key, val in book.items()
+        }
         for k in range(1, n + 1):
             mine = [c for c in chunks if part_of[c.index] == k]
             pf = next((c.page_first for c in mine if c.page_first), None)
@@ -180,7 +197,7 @@ class BookJob:
                 "quotes": [q for c in mine for q in quotes[c.index]],
                 "figures": [f for c in mine for f in figs.get(c.index, [])],
                 "audit_fixes": synth.get("audit_fixes", []) if k == 1 else [],
-                **(book if k == 1 else {key: [] for key in book}),
+                **(book if k == 1 else empty_book),
             }
             ctx["word_count"] = word_count(ctx)
             ctx["read_minutes"] = max(1, math.ceil(ctx["word_count"] / WPM))
@@ -198,3 +215,7 @@ def _pages(c) -> str:
 def output_name(title: str, part: int = 1, parts: int = 1) -> str:
     suffix = f" (Part {part} of {parts})" if parts > 1 else ""
     return f"{safe_filename(title)} – Summary{suffix}.html"
+
+
+def epub_name(title: str) -> str:
+    return f"{safe_filename(title)} – Summary.epub"

@@ -84,7 +84,7 @@ def trim_index_tail(text: str, a: int, b: int) -> int:
             continue
         else:
             break
-    return cut if cut is not None and run >= 8 else b
+    return cut if cut is not None and run >= 8 and cut > a else b
 
 
 def _pick_level(doc: Doc, hs: list, chunk_tokens: int) -> int:
@@ -102,10 +102,10 @@ def _pick_level(doc: Doc, hs: list, chunk_tokens: int) -> int:
 
 
 def build_chunks(doc: Doc, cfg: dict) -> list:
+    min_tokens = int(cfg["min_chunk_tokens"])
     chunk_tokens = int(cfg["chunk_tokens"])
     # Leave room for prompt + output inside the context window.
-    chunk_tokens = min(chunk_tokens, int(cfg["context_length"]) - int(cfg["max_output_tokens"]) - 2500)
-    min_tokens = int(cfg["min_chunk_tokens"])
+    chunk_tokens = max(min_tokens, min(chunk_tokens, int(cfg["context_length"]) - int(cfg["max_output_tokens"]) - 2500))
     start, end = doc.content_start, doc.content_end
 
     hs = sorted((h for h in doc.headings if start <= h.offset < end), key=lambda h: (h.offset, h.level))
@@ -188,15 +188,18 @@ def build_chunks(doc: Doc, cfg: dict) -> list:
 
 def _split_spans(text: str, a: int, b: int, n: int) -> list:
     """Split text[a:b] into n roughly equal spans, cutting only at paragraph (or sentence) breaks."""
+    if n <= 1 or a >= b:
+        return [(a, b)]
     breaks = [m.end() for m in re.finditer(r"\n\s*\n", text[a:b])]
     if len(breaks) < n * 3:
         breaks = [m.end() for m in re.finditer(r"(?<=[.!?][\"”’)]?)\s+", text[a:b])]
-    breaks = [a + x for x in breaks]
+    breaks = [a + x for x in breaks if a < a + x < b]
     spans, s = [], a
     for k in range(1, n):
         target = a + (b - a) * k // n
-        cut = min(breaks, key=lambda x: abs(x - target)) if breaks else target
-        if cut <= s:
+        valid_breaks = [x for x in breaks if x > s]
+        cut = min(valid_breaks, key=lambda x: abs(x - target)) if valid_breaks else target
+        if cut <= s or cut >= b:
             continue
         spans.append((s, cut))
         s = cut

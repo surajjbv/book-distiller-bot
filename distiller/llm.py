@@ -73,7 +73,8 @@ def _alive(pid: int) -> bool:
 
 @contextmanager
 def _locked():
-    """Hold the protocol's lock dir (atomic mkdir; one left by a crash is stale after 120 s)."""
+    """Hold the protocol's lock dir (atomic mkdir; one left by a crash is stale after 120 s). Kept empty: other bots
+    break a stale lock with rmdir, which fails on a non-empty dir."""
     LEASE_DIR.mkdir(parents=True, exist_ok=True)
     while True:
         try:
@@ -175,11 +176,11 @@ class LMStudio:
         """One attempt under the lock: our identifier, or ('busy', names) / ('refused', why)."""
         with _locked():
             _drop_dead()
-            self.lease.write_text(time.strftime("%Y-%m-%dT%H:%M:%S\n"))
             ps = self._ps()
             ours = [m for m in ps if self.model in (m.get("modelKey"), m.get("path"), m.get("indexedModelIdentifier"))
                     and (m.get("contextLength") or 0) >= PROFILE["context"]]
             if ours:
+                self.lease.write_text(time.strftime("%Y-%m-%dT%H:%M:%S\n"), encoding="utf-8")
                 return ours[0]["identifier"]
             OWNED.unlink(missing_ok=True)  # our earlier load is gone (TTL), so the marker is stale
             busy, idle_min = [], float(self.cfg.get("takeover_idle_minutes", 5))
@@ -201,28 +202,29 @@ class LMStudio:
                             "-y", timeout=900)
             if not any(m.get("identifier") == PROFILE["identifier"] for m in self._ps()):
                 return ("refused", f"LM Studio could not load {self.model}: {out.strip()[-300:]}")
-            OWNED.write_text(f"{self.lease.name} {time.strftime('%Y-%m-%dT%H:%M:%S')}\n")
+            self.lease.write_text(time.strftime("%Y-%m-%dT%H:%M:%S\n"), encoding="utf-8")
+            OWNED.write_text(f"{self.lease.name} {time.strftime('%Y-%m-%dT%H:%M:%S')}\n", encoding="utf-8")
             return PROFILE["identifier"]
 
     def ready(self) -> None:
         """Hold a lease and have the model loaded (cheap once held). Waits up to 10 min while another app's model is
         busy; if the model still can't be had, raises ModelBusy (exit 75)."""
-        with self._lock:
-            if self.identifier:
-                return
-            deadline, waited = time.time() + 600, 0
-            while True:
+        deadline, waited = time.time() + 600, 0
+        while True:
+            with self._lock:
+                if self.identifier:
+                    return
                 r = self._try_acquire()
                 if isinstance(r, str):
                     self.identifier = r
                     return
-                if r[0] == "refused" or time.time() > deadline:
-                    self.release()
-                    raise ModelBusy(r[1] if r[0] == "refused" else f"LM Studio stayed busy with {', '.join(r[1])} for 10 min")
-                if waited % 120 == 0:
-                    log.info("Waiting for %s to finish in LM Studio (another app is using it)…", ", ".join(r[1]))
-                time.sleep(15)
-                waited += 15
+            if r[0] == "refused" or time.time() > deadline:
+                self.release()
+                raise ModelBusy(r[1] if r[0] == "refused" else f"LM Studio stayed busy with {', '.join(r[1])} for 10 min")
+            if waited % 120 == 0:
+                log.info("Waiting for %s to finish in LM Studio (another app is using it)…", ", ".join(r[1]))
+            time.sleep(15)
+            waited += 15
 
     def release(self) -> None:
         """Drop our lease; the last app out unloads the model if an app (not a person) loaded it. Safe to repeat."""
@@ -259,7 +261,8 @@ class LMStudio:
                 content, finish, usage = self._stream(messages, schema, name, max_tok)
             except requests.RequestException as e:
                 err = str(e)[:400]
-                self.identifier = None  # e.g. the model was unloaded under us: take it again before the next try
+                with self._lock:
+                    self.identifier = None  # e.g. the model was unloaded under us: take it again before the next try
                 log.warning("[%s] request failed: %s (attempt %d)", name, err, attempt + 1)
                 continue
             with self._lock:
@@ -294,7 +297,9 @@ class LMStudio:
             url, body["messages"] = f"{self.base}/chat/completions", messages
         else:
             url = f"{self.base}/completions"
-            body["prompt"] = "".join(f"<|im_start|>{m['role']}\n{m['content']}<|im_end|>\n" for m in messages) \
+            def clean_prompt(c: str) -> str:
+                return str(c).replace("<|im_start|>", "<| im_start |>").replace("<|im_end|>", "<| im_end |>")
+            body["prompt"] = "".join(f"<|im_start|>{m['role']}\n{clean_prompt(m['content'])}<|im_end|>\n" for m in messages) \
                 + "<|im_start|>assistant\n<think>\n\n</think>\n\n"
             body["stop"] = ["<|im_end|>"]
         with requests.post(url, json=body, stream=True, timeout=(10, int(self.cfg["request_timeout"]))) as r:
@@ -308,7 +313,10 @@ class LMStudio:
                 data = line[5:].strip()
                 if data == "[DONE]":
                     break
-                ev = json.loads(data)
+                try:
+                    ev = json.loads(data)
+                except json.JSONDecodeError as e:
+                    raise requests.HTTPError(f"LM Studio malformed SSE: {e}")
                 if ev.get("error"):
                     raise requests.HTTPError(f"LM Studio: {str(ev['error'])[:300]}")
                 usage = ev.get("usage") or usage

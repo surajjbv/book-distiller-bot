@@ -131,6 +131,36 @@ class SkipTests(unittest.TestCase):
         self.assertTrue((cli.WORK_DIR / "b").exists())
 
 
+    def test_a_missing_epub_is_rebuilt_only_from_saved_work(self):
+        from distiller import cli
+        from distiller.util import sha256_file
+        tmp = Path(tempfile.mkdtemp())
+        book, out = tmp / "b.pdf", tmp / "out"
+        book.write_bytes(b"%PDF-1.4 test")
+        out.mkdir()
+        cli.INDEX_PATH, cli.WORK_DIR = tmp / "index.json", tmp / "work"
+        files = [str(out / "B – Summary.html"), str(out / "B – Summary.epub")]
+        cli.INDEX_PATH.write_text(json.dumps({sha256_file(book): {"source": "b.pdf", "title": "B", "output": files[0],
+                                                                   "files": files}}))
+        (out / "B – Summary.html").write_text("done")
+        cli.process(book, {"notify": False}, None, out)  # EPUB gone but no saved work: skipped, never a full re-run
+        self.assertFalse((cli.WORK_DIR / "b").exists())
+        (cli.WORK_DIR / "b").mkdir(parents=True)
+        for f in ("synthesis.json", "images.json"):
+            (cli.WORK_DIR / "b" / f).write_text("{}")
+        with self.assertRaises(Exception):  # saved work: it rebuilds (and fails here, without a real book)
+            cli.process(book, {"notify": False}, None, out)
+        self.assertTrue((cli.WORK_DIR / "b" / "state.json").exists())
+
+    def test_a_missing_book_is_logged_once(self):
+        from distiller import cli
+        tmp = Path(tempfile.mkdtemp())
+        cli.INDEX_PATH, cli.WORK_DIR = tmp / "index.json", tmp / "work"
+        with self.assertLogs(cli.log, "ERROR") as logs:
+            with self.assertRaises(FileNotFoundError):
+                cli.process(tmp / "gone.pdf", {"notify": False}, None, tmp / "out")
+        self.assertEqual(sum("✗ gone.pdf failed" in m for m in logs.output), 1)
+
 class ConfigTests(unittest.TestCase):
     def test_validation_and_profile(self):
         p = Path(tempfile.mkdtemp()) / "config.json"

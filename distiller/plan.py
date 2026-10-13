@@ -22,7 +22,10 @@ def part_minutes(style: str) -> int:
 
 
 def plan_book(llm: LMStudio, doc: Doc, chunks: list, cfg: dict, style: str) -> dict:
-    lo, hi = part_minutes(style) - 10, int(cfg.get("max_minutes", 120))
+    hi = max(10, int(cfg.get("max_minutes", 120)))
+    lo = max(5, min(part_minutes(style) - 10, hi))
+    if not chunks:
+        return {"minutes": lo, "parts": 1, "reason": "No chapters found."}
     words = sum(c.tokens for c in chunks) * 3 // 4
     toc = "\n".join(f"{c.index}. {c.title} (~{c.tokens * 3 // 4:,} words)" for c in chunks)
     opening = doc.text[chunks[0].start:chunks[0].start + 6000]
