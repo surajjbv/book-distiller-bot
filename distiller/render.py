@@ -1,4 +1,5 @@
 """Render the summary with Jinja2. The LLM never writes HTML."""
+
 from __future__ import annotations
 
 import base64
@@ -45,8 +46,12 @@ def chapter_links(refs, hrefs: dict) -> Markup:
 
 
 def env() -> Environment:
-    e = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=select_autoescape(["html", "j2"]),
-                    trim_blocks=True, lstrip_blocks=True)
+    e = Environment(
+        loader=FileSystemLoader(str(TEMPLATE_DIR)),
+        autoescape=select_autoescape(["html", "j2"]),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
     e.filters["md"] = inline_md
     e.filters["plain"] = strip_md
     return e
@@ -70,8 +75,26 @@ def word_count(ctx: dict) -> int:
         elif isinstance(v, list):
             for x in v:
                 walk(x)
-    walk({k: ctx[k] for k in ("tldr", "core_thesis", "themes", "chapters", "frameworks", "key_stories",
-                              "figures", "takeaways", "quotes", "critique", "cheat_sheet") if k in ctx})
+
+    walk(
+        {
+            k: ctx[k]
+            for k in (
+                "tldr",
+                "core_thesis",
+                "themes",
+                "chapters",
+                "frameworks",
+                "key_stories",
+                "figures",
+                "takeaways",
+                "quotes",
+                "critique",
+                "cheat_sheet",
+            )
+            if k in ctx
+        }
+    )
     return n
 
 

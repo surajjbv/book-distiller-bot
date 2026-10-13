@@ -3,6 +3,7 @@
 Length is in reading minutes. It is split into parts of at most `part_minutes` (the upper bound of the
 "20–30 minute read" line in style.md), capped by `max_minutes` in config.json (120 = at most 4 parts).
 """
+
 from __future__ import annotations
 
 import math
@@ -12,8 +13,8 @@ from .extract import _obj, text
 from .ingest import Doc
 from .llm import LMStudio
 
-WPM = 230            # reading speed used for all minute <-> word conversions
-SYNTH_MAX = 2600     # the whole-book overview (TL;DR … cheat sheet) never grows past this
+WPM = 230  # reading speed used for all minute <-> word conversions
+SYNTH_MAX = 2600  # the whole-book overview (TL;DR … cheat sheet) never grows past this
 
 
 def part_minutes(style: str) -> int:
@@ -28,9 +29,13 @@ def plan_book(llm: LMStudio, doc: Doc, chunks: list, cfg: dict, style: str) -> d
         return {"minutes": lo, "parts": 1, "reason": "No chapters found."}
     words = sum(c.tokens for c in chunks) * 3 // 4
     toc = "\n".join(f"{c.index}. {c.title} (~{c.tokens * 3 // 4:,} words)" for c in chunks)
-    opening = doc.text[chunks[0].start:chunks[0].start + 6000]
+    opening = doc.text[chunks[0].start : chunks[0].start + 6000]
     schema = _obj(read_minutes={"type": "integer", "minimum": lo, "maximum": hi}, reason=text(20))
-    p = llm.chat_json([{"role": "user", "content": f"""Book: "{doc.title}"{f" by {doc.author}" if doc.author else ""}
+    p = llm.chat_json(
+        [
+            {
+                "role": "user",
+                "content": f"""Book: "{doc.title}"{f" by {doc.author}" if doc.author else ""}
 Length: ~{words:,} words (about {words / WPM / 60:.1f} hours to read in full), {len(chunks)} sections.
 
 CONTENTS:
@@ -44,11 +49,20 @@ OPENING:
 Decide how long an executive summary of this book should be, in reading minutes ({lo}–{hi}).
 Guide: short or light books, or books that repeat one idea: {lo}–30. Typical non-fiction: 30–60.
 Long, dense books with many distinct ideas, frameworks or arguments: 60–{hi}. Never pad: give a book only
-the time its ideas need. reason: one sentence on why."""}], schema, "plan", max_tokens=300)
+the time its ideas need. reason: one sentence on why.""",
+            }
+        ],
+        schema,
+        "plan",
+        max_tokens=300,
+    )
     minutes = max(lo, min(hi, int(p["read_minutes"])))
     pm = part_minutes(style)
-    return {"minutes": minutes, "parts": max(1, min(math.ceil(minutes / pm), math.ceil(hi / pm))),
-            "reason": p["reason"]}
+    return {
+        "minutes": minutes,
+        "parts": max(1, min(math.ceil(minutes / pm), math.ceil(hi / pm))),
+        "reason": p["reason"],
+    }
 
 
 def budgets(plan: dict, chunks: list) -> tuple:

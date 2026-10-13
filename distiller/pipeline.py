@@ -2,6 +2,7 @@
 
 Every step writes its result to work/<book>/ as soon as it is done, so a crash resumes where it stopped.
 """
+
 from __future__ import annotations
 
 import math
@@ -25,8 +26,14 @@ from .synth import Synthesizer
 from .util import DistillerError, log, pmap, read_json, read_style, safe_filename, write_json
 
 STEPS = ["chunk", "plan", "extract", "synthesize", "images", "render"]
-ARTIFACTS = {"chunk": ["doc.json", "chunks.json"], "plan": ["plan.json"], "extract": ["notes", "verify.json"],
-             "synthesize": ["synthesis", "synthesis.json"], "images": ["images", "images.json"], "render": []}
+ARTIFACTS = {
+    "chunk": ["doc.json", "chunks.json"],
+    "plan": ["plan.json"],
+    "extract": ["notes", "verify.json"],
+    "synthesize": ["synthesis", "synthesis.json"],
+    "images": ["images", "images.json"],
+    "render": [],
+}
 
 
 class BookJob:
@@ -37,7 +44,7 @@ class BookJob:
         self.bar: tqdm | None = None
 
     def reset_from(self, step: str) -> None:
-        for s in STEPS[STEPS.index(step):]:
+        for s in STEPS[STEPS.index(step) :]:
             for name in ARTIFACTS[s]:
                 p = self.dir / name
                 if p.is_dir():
@@ -63,8 +70,13 @@ class BookJob:
         write_json(self.dir / "doc.json", doc.to_json())
         write_json(self.dir / "chunks.json", chunking.chunks_to_json(chunks))
         for x in chunks:
-            log.info("  %2d. %-58s %6s tok  %s", x.index, x.title[:58], x.tokens,
-                     f"p.{x.page_first}–{x.page_last}" if x.page_first else x.kind)
+            log.info(
+                "  %2d. %-58s %6s tok  %s",
+                x.index,
+                x.title[:58],
+                x.tokens,
+                f"p.{x.page_first}–{x.page_last}" if x.page_first else x.kind,
+            )
         return doc, chunks
 
     def plan(self, doc, chunks) -> dict:
@@ -81,14 +93,20 @@ class BookJob:
             rec = read_json(p)
             if rec is None:
                 t = time.time()
-                rec = {"chunk": c.index, "title": c.title, "model": self.llm.model,
-                       "notes": extract_chunk(self.llm, doc, c, len(chunks), self.style, words)}
+                rec = {
+                    "chunk": c.index,
+                    "title": c.title,
+                    "model": self.llm.model,
+                    "notes": extract_chunk(self.llm, doc, c, len(chunks), self.style, words),
+                }
                 write_json(p, rec)
                 log.debug("chunk %d extracted in %.0fs", c.index, time.time() - t)
             self.tick(1)
             return c.index, rec["notes"]
 
-        return dict(pmap(one, sorted(chunks, key=lambda c: -c.tokens), self.parallel))  # largest first: slots finish together
+        return dict(
+            pmap(one, sorted(chunks, key=lambda c: -c.tokens), self.parallel)
+        )  # largest first: slots finish together
 
     def verify(self, doc, chunks, raw: dict) -> tuple:
         notes, report = {}, {"total": 0, "kept": 0, "exact": 0, "fuzzy": 0, "dropped": []}
@@ -101,8 +119,13 @@ class BookJob:
             n.update(_index=c.index, _title=c.title, _pages=_pages(c))
             notes[c.index] = n
         write_json(self.dir / "verify.json", report)
-        log.info("Quotes verified: %d/%d kept (%d exact, %d corrected to the source wording)",
-                 report["kept"], report["total"], report["exact"], report["fuzzy"])
+        log.info(
+            "Quotes verified: %d/%d kept (%d exact, %d corrected to the source wording)",
+            report["kept"],
+            report["total"],
+            report["exact"],
+            report["fuzzy"],
+        )
         return notes, report
 
     # ------------------------------------------------------------ run
@@ -110,8 +133,13 @@ class BookJob:
     def run(self) -> dict:
         t0 = time.time()
         doc, chunks = self.load()
-        self.bar = tqdm(total=len(chunks) + 8, unit="step", dynamic_ncols=True, desc=doc.title[:30],
-                        bar_format="{desc}: {percentage:3.0f}%|{bar}| {n:.0f}/{total:.0f} [{elapsed}<{remaining}]")
+        self.bar = tqdm(
+            total=len(chunks) + 8,
+            unit="step",
+            dynamic_ncols=True,
+            desc=doc.title[:30],
+            bar_format="{desc}: {percentage:3.0f}%|{bar}| {n:.0f}/{total:.0f} [{elapsed}<{remaining}]",
+        )
         pages = []
         try:
             plan = self.plan(doc, chunks)
@@ -121,8 +149,9 @@ class BookJob:
             self.tick(1)
             synth = read_json(self.dir / "synthesis.json")
             if synth is None:
-                final, fixes = Synthesizer(self.llm, self.cfg, self.style, doc.title, doc.author, self.dir,
-                                           words=synth_words, tick=self.tick).run([notes[c.index] for c in chunks])
+                final, fixes = Synthesizer(
+                    self.llm, self.cfg, self.style, doc.title, doc.author, self.dir, words=synth_words, tick=self.tick
+                ).run([notes[c.index] for c in chunks])
                 synth = {"synthesis": final, "audit_fixes": fixes}
                 write_json(self.dir / "synthesis.json", synth)
             else:
@@ -136,8 +165,10 @@ class BookJob:
             epub_info = None
             try:
                 minutes = math.ceil(sum(p["words"] for p in pages) / WPM)
-                epub_info = {"name": epub_name(doc.title),
-                             "data": build_epub(doc, chunks, notes, synth, figures, minutes, self.dir)}
+                epub_info = {
+                    "name": epub_name(doc.title),
+                    "data": build_epub(doc, chunks, notes, synth, figures, minutes, self.dir),
+                }
             except Exception as e:
                 log.warning("EPUB generation skipped: %s", e)
             self.tick(1)
@@ -149,29 +180,51 @@ class BookJob:
                 self.bar = None
 
         words = sum(p["words"] for p in pages)
-        log.info("Rendered %d part(s), %s words (~%d min read) in %.0fs · %s", len(pages), f"{words:,}",
-                 math.ceil(words / WPM), time.time() - t0, self.llm.stats())
+        log.info(
+            "Rendered %d part(s), %s words (~%d min read) in %.0fs · %s",
+            len(pages),
+            f"{words:,}",
+            math.ceil(words / WPM),
+            time.time() - t0,
+            self.llm.stats(),
+        )
         return {"title": doc.title, "pages": pages, "epub": epub_info, "read_minutes": math.ceil(words / WPM)}
 
     def render(self, doc, chunks, notes, synth, figures, qreport, plan) -> list:
         """One HTML page per part. Part 1 carries the whole-book overview; chapters follow in book order."""
         s = tidy(synth["synthesis"])
-        book = {"tldr": s.get("tldr", []), "core_thesis": s.get("core_thesis", ""), "themes": s.get("themes", []),
-                "frameworks": s.get("frameworks", []), "key_stories": s.get("key_stories", []),
-                "takeaways": s.get("takeaways", []), "critique": s.get("critique", {}),
-                "cheat_sheet": s.get("cheat_sheet", [])}
+        book = {
+            "tldr": s.get("tldr", []),
+            "core_thesis": s.get("core_thesis", ""),
+            "themes": s.get("themes", []),
+            "frameworks": s.get("frameworks", []),
+            "key_stories": s.get("key_stories", []),
+            "takeaways": s.get("takeaways", []),
+            "critique": s.get("critique", {}),
+            "cheat_sheet": s.get("cheat_sheet", []),
+        }
         chapters, quotes, figs = {}, {}, {}
         for c in chunks:
             n = notes[c.index]
-            chapters[c.index] = {"index": c.index, "title": c.title, "kind": c.kind, "pages": n["_pages"],
-                                 "core_idea": n.get("core_idea"), "summary": n.get("summary"),
-                                 "key_arguments": n.get("key_arguments", []), "frameworks": n.get("frameworks", []),
-                                 "data_points": n.get("data_points", []), "examples": n.get("examples", []),
-                                 "takeaways": n.get("takeaways", [])}
+            chapters[c.index] = {
+                "index": c.index,
+                "title": c.title,
+                "kind": c.kind,
+                "pages": n["_pages"],
+                "core_idea": n.get("core_idea"),
+                "summary": n.get("summary"),
+                "key_arguments": n.get("key_arguments", []),
+                "frameworks": n.get("frameworks", []),
+                "data_points": n.get("data_points", []),
+                "examples": n.get("examples", []),
+                "takeaways": n.get("takeaways", []),
+            }
             quotes[c.index] = [dict(q, chapter=c.title, chunk=c.index) for q in n["quotes"]]
         for f in figures:
             if (self.dir / "images" / f["file"]).exists():
-                figs.setdefault(f["chunk"], []).append(dict(f, src=data_uri(self.dir / "images" / f["file"], f["mime"])))
+                figs.setdefault(f["chunk"], []).append(
+                    dict(f, src=data_uri(self.dir / "images" / f["file"], f["mime"]))
+                )
 
         sizes = [word_count({"chapters": [chapters[c.index]], "quotes": quotes[c.index]}) for c in chunks]
         part_of = dict(zip([c.index for c in chunks], split_parts(sizes, plan["parts"], word_count(book))))
@@ -179,18 +232,23 @@ class BookJob:
         names = [output_name(doc.title, k, n) for k in range(1, n + 1)]
         pages = []
         empty_book = {
-            key: ("" if isinstance(val, str) else {} if isinstance(val, dict) else [])
-            for key, val in book.items()
+            key: ("" if isinstance(val, str) else {} if isinstance(val, dict) else []) for key, val in book.items()
         }
         for k in range(1, n + 1):
             mine = [c for c in chunks if part_of[c.index] == k]
             pf = next((c.page_first for c in mine if c.page_first), None)
             pl = next((c.page_last for c in reversed(mine) if c.page_last), None)
             ctx = {
-                "title": doc.title, "author": doc.author, "generated": date.today().isoformat(),
-                "source_file": self.path.name, "model": self.llm.model, "quote_stats": qreport,
+                "title": doc.title,
+                "author": doc.author,
+                "generated": date.today().isoformat(),
+                "source_file": self.path.name,
+                "model": self.llm.model,
+                "quote_stats": qreport,
                 "page_range": f"pp. {pf}–{pl}" if pf and pl else "",
-                "part": k, "parts": n, "show_book": k == 1,
+                "part": k,
+                "parts": n,
+                "show_book": k == 1,
                 "nav": [{"n": j, "href": quote(names[j - 1]), "current": j == k} for j in range(1, n + 1)],
                 "chapter_href": {i: ("" if p == k else quote(names[p - 1])) for i, p in part_of.items()},
                 "chapters": [chapters[c.index] for c in mine],
@@ -201,8 +259,14 @@ class BookJob:
             }
             ctx["word_count"] = word_count(ctx)
             ctx["read_minutes"] = max(1, math.ceil(ctx["word_count"] / WPM))
-            pages.append({"name": names[k - 1], "html": render_summary(ctx), "words": ctx["word_count"],
-                          "minutes": ctx["read_minutes"]})
+            pages.append(
+                {
+                    "name": names[k - 1],
+                    "html": render_summary(ctx),
+                    "words": ctx["word_count"],
+                    "minutes": ctx["read_minutes"],
+                }
+            )
         return pages
 
 

@@ -1,4 +1,5 @@
 """Per-chunk structured extraction and verbatim quote verification."""
+
 from __future__ import annotations
 
 import re
@@ -47,19 +48,24 @@ def note_schema(words: int | None) -> dict:
 
 NOTE_SCHEMA = note_schema(None)
 
-SYSTEM = ("You are an expert analyst who distils non-fiction books into precise, structured notes for "
-          "an executive summary. Use only what the provided text says — never add outside knowledge, "
-          "never invent frameworks, numbers or quotes. Return JSON only.")
+SYSTEM = (
+    "You are an expert analyst who distils non-fiction books into precise, structured notes for "
+    "an executive summary. Use only what the provided text says — never add outside knowledge, "
+    "never invent frameworks, numbers or quotes. Return JSON only."
+)
 
 
 def extraction_messages(doc: Doc, c: Chunk, n_chunks: int, style: str, words: int | None) -> list:
     pages = ""
     if c.page_first:
         pages = f", pages {c.page_first}–{c.page_last}" if c.page_last != c.page_first else f", page {c.page_first}"
-    budget = (f"\n\nLENGTH BUDGET: this book is summarised in {n_chunks} sections, so keep everything you write "
-              f"for this section to at most {words} words in total across all fields (quotes excluded). This is a hard "
-              "limit: use fewer items rather than longer ones, and keep only the most important."
-              if words else "")
+    budget = (
+        f"\n\nLENGTH BUDGET: this book is summarised in {n_chunks} sections, so keep everything you write "
+        f"for this section to at most {words} words in total across all fields (quotes excluded). This is a hard "
+        "limit: use fewer items rather than longer ones, and keep only the most important."
+        if words
+        else ""
+    )
     user = f"""Book: "{doc.title}"{f" by {doc.author}" if doc.author else ""}
 Section {c.index} of {n_chunks}: "{c.title}"{pages}
 
@@ -91,10 +97,27 @@ def extract_chunk(llm: LMStudio, doc: Doc, c: Chunk, n_chunks: int, style: str, 
 
 # ====================================================================== quote verification
 
-_TRANS = str.maketrans({"‘": "'", "’": "'", "‚": "'", "‛": "'", "′": "'",
-                        "“": '"', "”": '"', "„": '"', "″": '"',
-                        "–": "-", "—": "-", "‒": "-", "−": "-", "­": None,
-                        " ": " ", "…": "...", "`": "'"})
+_TRANS = str.maketrans(
+    {
+        "‘": "'",
+        "’": "'",
+        "‚": "'",
+        "‛": "'",
+        "′": "'",
+        "“": '"',
+        "”": '"',
+        "„": '"',
+        "″": '"',
+        "–": "-",
+        "—": "-",
+        "‒": "-",
+        "−": "-",
+        "­": None,
+        " ": " ",
+        "…": "...",
+        "`": "'",
+    }
+)
 
 
 def normalize_with_map(s: str):
@@ -123,7 +146,7 @@ MARKER_RE = re.compile(r"\[p\.\s*[^\]]*\]\s*")
 def verify_quotes(doc: Doc, c: Chunk, note: dict, threshold: int) -> tuple:
     """Keep only quotes that exist in the chunk's source text. Fixes the quote to the exact source
     wording and replaces the page number with the true page. Returns (quotes, stats)."""
-    src = doc.text[c.start:c.end]
+    src = doc.text[c.start : c.end]
     norm, idx = normalize_with_map(src)
     kept, stats = [], {"total": 0, "kept": 0, "exact": 0, "fuzzy": 0, "dropped": []}
     seen = set()

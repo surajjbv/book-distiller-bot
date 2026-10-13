@@ -1,4 +1,5 @@
 """Figure extraction (PDF/EPUB), heuristic filtering, and optional vision-model screening + captions."""
+
 from __future__ import annotations
 
 import base64
@@ -16,8 +17,21 @@ from .util import log, pmap
 Image.MAX_IMAGE_PIXELS = 50_000_000  # refuse decompression bombs
 
 VISION_SCHEMA = _obj(
-    kind={"type": "string", "enum": ["diagram", "chart", "table", "infographic", "map", "photo",
-                                     "illustration", "decorative", "text", "other"]},
+    kind={
+        "type": "string",
+        "enum": [
+            "diagram",
+            "chart",
+            "table",
+            "infographic",
+            "map",
+            "photo",
+            "illustration",
+            "decorative",
+            "text",
+            "other",
+        ],
+    },
     meaningful={"type": "boolean"},
     importance={"type": "integer", "minimum": 1, "maximum": 10},
     caption=text(10),
@@ -72,6 +86,7 @@ def candidates(doc: Doc, cfg: dict) -> list:
 
     if doc.fmt == "pdf":
         import pymupdf as fitz
+
         with fitz.open(doc.path) as d:
             xref_pages: dict = {}
             for page in d:
@@ -110,6 +125,7 @@ def candidates(doc: Doc, cfg: dict) -> list:
                 _vector_figure(page, p_area, offset, label, accept)
     else:
         from ebooklib import epub
+
         book = epub.read_epub(doc.path, {"ignore_ncx": True})
         by_name = {it.get_name(): it for it in book.get_items()}
         counts: dict = {}
@@ -138,6 +154,7 @@ def _vector_figure(page, p_area, offset, label, accept) -> None:
     if len(rects) < 25:
         return
     import pymupdf as fitz
+
     box = fitz.Rect(rects[0])
     for r in rects[1:]:
         box |= r
@@ -168,15 +185,27 @@ def process_images(doc: Doc, chunks: list, notes: dict, cfg: dict, llm: LMStudio
     def screen(c):
         ch = chunk_for_offset(chunks, c["offset"])
         data, mime = _prepare(c["img"], 1024)
-        prompt = (f'This image is from the book "{doc.title}", chapter "{ch.title}"'
-                  + (f" (page {c['page']})" if c["page"] else "")
-                  + f". Chapter idea: {notes.get(ch.index, {}).get('core_idea', '')}\n\n"
-                  "Classify it. meaningful = true only if it carries information a reader of a summary would want "
-                  "(a diagram, chart, table, model, map or data). Decorative art, photos of people, ornaments, cover art "
-                  "and images of plain text are not meaningful. importance: 1-10 for how much it helps explain the "
-                  "book's ideas. caption: one or two sentences on what it shows and why it matters (no 'This image shows').")
-        msgs = [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {
-            "url": f"data:{mime};base64,{base64.b64encode(data).decode()}"}}]}]
+        prompt = (
+            f'This image is from the book "{doc.title}", chapter "{ch.title}"'
+            + (f" (page {c['page']})" if c["page"] else "")
+            + f". Chapter idea: {notes.get(ch.index, {}).get('core_idea', '')}\n\n"
+            "Classify it. meaningful = true only if it carries information a reader of a summary would want "
+            "(a diagram, chart, table, model, map or data). Decorative art, photos of people, ornaments, cover art "
+            "and images of plain text are not meaningful. importance: 1-10 for how much it helps explain the "
+            "book's ideas. caption: one or two sentences on what it shows and why it matters (no 'This image shows')."
+        )
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{base64.b64encode(data).decode()}"},
+                    },
+                ],
+            }
+        ]
         try:
             v = llm.chat_json(msgs, VISION_SCHEMA, "figure", max_tokens=400)
             if THINKING.match(v["caption"]):  # image calls go through the chat endpoint, where Qwen may think aloud
@@ -186,12 +215,20 @@ def process_images(doc: Doc, chunks: list, notes: dict, cfg: dict, llm: LMStudio
         except Exception as e:
             log.warning("Figure on p.%s skipped: %s", c["page"], e)
             v = {"meaningful": False}
-        keep = v["meaningful"] and (v["kind"] in KEEP_KINDS or (v["kind"] in ("photo", "illustration") and v["importance"] >= 8))
-        return dict(c, chunk=ch.index, chapter=ch.title, caption=v["caption"], kind=v["kind"], importance=v["importance"]) if keep else None
+        keep = v["meaningful"] and (
+            v["kind"] in KEEP_KINDS or (v["kind"] in ("photo", "illustration") and v["importance"] >= 8)
+        )
+        return (
+            dict(c, chunk=ch.index, chapter=ch.title, caption=v["caption"], kind=v["kind"], importance=v["importance"])
+            if keep
+            else None
+        )
 
     kept = [k for k in pmap(screen, cands, int(cfg.get("parallel", 2))) if k]
-    kept = sorted(sorted(kept, key=lambda k: (-k["importance"], -k["area"]))[: int(cfg.get("image_cap", 15))],
-                  key=lambda k: k["offset"])
+    kept = sorted(
+        sorted(kept, key=lambda k: (-k["importance"], -k["area"]))[: int(cfg.get("image_cap", 15))],
+        key=lambda k: k["offset"],
+    )
 
     out_dir.mkdir(parents=True, exist_ok=True)
     records = []
@@ -199,7 +236,16 @@ def process_images(doc: Doc, chunks: list, notes: dict, cfg: dict, llm: LMStudio
         data, mime = _prepare(k["img"], 1400)
         path = out_dir / f"fig_{i:02d}.{'png' if mime == 'image/png' else 'jpg'}"
         path.write_bytes(data)
-        records.append({"file": path.name, "mime": mime, "page": k["page"], "chunk": k["chunk"],
-                        "chapter": k["chapter"], "caption": k["caption"], "kind": k["kind"]})
+        records.append(
+            {
+                "file": path.name,
+                "mime": mime,
+                "page": k["page"],
+                "chunk": k["chunk"],
+                "chapter": k["chapter"],
+                "caption": k["caption"],
+                "kind": k["kind"],
+            }
+        )
     log.info("Figures kept: %d", len(records))
     return records

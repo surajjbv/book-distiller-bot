@@ -1,4 +1,5 @@
 """LM Studio client: loads the one configured model via `lms`, runs JSON-schema chat completions."""
+
 from __future__ import annotations
 
 import atexit
@@ -35,7 +36,7 @@ def parse_json_loose(s: str):
     except json.JSONDecodeError:
         a, b = s.find("{"), s.rfind("}")
         if 0 <= a < b:
-            return json.loads(s[a:b + 1])
+            return json.loads(s[a : b + 1])
         raise
 
 
@@ -125,7 +126,9 @@ class LMStudio:
 
     def _run(self, *args: str, timeout: int = 600) -> str:
         if not self.lms:
-            raise DistillerError("LM Studio CLI `lms` not found.\n  Fix: open LM Studio once, or set lms_path in config.json.")
+            raise DistillerError(
+                "LM Studio CLI `lms` not found.\n  Fix: open LM Studio once, or set lms_path in config.json."
+            )
         r = subprocess.run([self.lms, *args], capture_output=True, text=True, timeout=timeout)
         return ANSI.sub("", (r.stdout or "") + (r.stderr or ""))
 
@@ -145,26 +148,40 @@ class LMStudio:
                     break
                 time.sleep(1)
             else:
-                raise DistillerError(f"LM Studio server not reachable at {self.base}.\n"
-                                     "  Fix: open LM Studio (Bionic.app) or run `lms server start`.")
+                raise DistillerError(
+                    f"LM Studio server not reachable at {self.base}.\n"
+                    "  Fix: open LM Studio (Bionic.app) or run `lms server start`."
+                )
         try:
             keys = {m["modelKey"] for m in json.loads(self._run("ls", "--json", timeout=60))}
         except (json.JSONDecodeError, KeyError):
             keys = set()
         if self.model not in keys:
-            raise DistillerError(f"Model '{self.model}' is not downloaded in LM Studio.\n"
-                                 "  Fix: lms get https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit")
+            raise DistillerError(
+                f"Model '{self.model}' is not downloaded in LM Studio.\n"
+                "  Fix: lms get https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit"
+            )
         if not self._ps():  # with a model loaded the estimate is meaningless; the lease protocol decides then
             out = self._estimate()
             if "will fail" in out:
                 mem = re.search(r"Estimated Total Memory:\s*([\d.]+\s*\w+)", out)
                 raise DistillerError(
                     f"Not enough free memory for {self.model} (LM Studio estimates {mem.group(1) if mem else '?'}).\n"
-                    "  Fix: quit other apps (Chrome is usually the biggest) and run again. The guardrail stays on.")
+                    "  Fix: quit other apps (Chrome is usually the biggest) and run again. The guardrail stays on."
+                )
 
     def _estimate(self) -> str:
-        return self._run("load", self.model, "--estimate-only", "--context-length", str(PROFILE["context"]),
-                         "--parallel", str(PROFILE["parallel"]), "-y", timeout=120)
+        return self._run(
+            "load",
+            self.model,
+            "--estimate-only",
+            "--context-length",
+            str(PROFILE["context"]),
+            "--parallel",
+            str(PROFILE["parallel"]),
+            "-y",
+            timeout=120,
+        )
 
     def _ps(self) -> list:
         try:
@@ -177,8 +194,12 @@ class LMStudio:
         with _locked():
             _drop_dead()
             ps = self._ps()
-            ours = [m for m in ps if self.model in (m.get("modelKey"), m.get("path"), m.get("indexedModelIdentifier"))
-                    and (m.get("contextLength") or 0) >= PROFILE["context"]]
+            ours = [
+                m
+                for m in ps
+                if self.model in (m.get("modelKey"), m.get("path"), m.get("indexedModelIdentifier"))
+                and (m.get("contextLength") or 0) >= PROFILE["context"]
+            ]
             if ours:
                 self.lease.write_text(time.strftime("%Y-%m-%dT%H:%M:%S\n"), encoding="utf-8")
                 return ours[0]["identifier"]
@@ -197,9 +218,20 @@ class LMStudio:
             if "will fail" in self._estimate():
                 return ("refused", f"LM Studio's memory guardrail would refuse {self.model} now")
             log.info("Loading %s…", self.model)
-            out = self._run("load", self.model, "--identifier", PROFILE["identifier"], "--context-length",
-                            str(PROFILE["context"]), "--parallel", str(PROFILE["parallel"]), "--ttl", str(PROFILE["ttl"]),
-                            "-y", timeout=900)
+            out = self._run(
+                "load",
+                self.model,
+                "--identifier",
+                PROFILE["identifier"],
+                "--context-length",
+                str(PROFILE["context"]),
+                "--parallel",
+                str(PROFILE["parallel"]),
+                "--ttl",
+                str(PROFILE["ttl"]),
+                "-y",
+                timeout=900,
+            )
             if not any(m.get("identifier") == PROFILE["identifier"] for m in self._ps()):
                 return ("refused", f"LM Studio could not load {self.model}: {out.strip()[-300:]}")
             self.lease.write_text(time.strftime("%Y-%m-%dT%H:%M:%S\n"), encoding="utf-8")
@@ -220,7 +252,9 @@ class LMStudio:
                     return
             if r[0] == "refused" or time.time() > deadline:
                 self.release()
-                raise ModelBusy(r[1] if r[0] == "refused" else f"LM Studio stayed busy with {', '.join(r[1])} for 10 min")
+                raise ModelBusy(
+                    r[1] if r[0] == "refused" else f"LM Studio stayed busy with {', '.join(r[1])} for 10 min"
+                )
             if waited % 120 == 0:
                 log.info("Waiting for %s to finish in LM Studio (another app is using it)…", ", ".join(r[1]))
             time.sleep(15)
@@ -241,7 +275,6 @@ class LMStudio:
                     log.info("Model unloaded")
         except Exception as e:  # never let cleanup hide the real error
             log.warning("Model release failed: %s", e)
-
 
     # ------------------------------------------------------------ chat
 
@@ -290,16 +323,25 @@ class LMStudio:
         Text calls use the raw completions endpoint with Qwen's chat format ending in an empty <think> block:
         that is the only reliable way to switch Qwen3.8's thinking off (via the chat endpoint it writes its
         reasoning into the JSON). Image calls must use the chat endpoint."""
-        body = {"model": self.identifier or PROFILE["identifier"], "temperature": self.cfg["temperature"], "max_tokens": max_tok, "stream": True,
-                "stream_options": {"include_usage": True},
-                "response_format": {"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": schema}}}
+        body = {
+            "model": self.identifier or PROFILE["identifier"],
+            "temperature": self.cfg["temperature"],
+            "max_tokens": max_tok,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "response_format": {"type": "json_schema", "json_schema": {"name": name, "strict": True, "schema": schema}},
+        }
         if any(isinstance(m["content"], list) for m in messages):
             url, body["messages"] = f"{self.base}/chat/completions", messages
         else:
             url = f"{self.base}/completions"
-            esc = lambda c: str(c).replace("<|im_start|>", "<| im_start |>").replace("<|im_end|>", "<| im_end |>")  # book text can't end a turn
-            body["prompt"] = "".join(f"<|im_start|>{m['role']}\n{esc(m['content'])}<|im_end|>\n" for m in messages) \
+            esc = lambda c: (
+                str(c).replace("<|im_start|>", "<| im_start |>").replace("<|im_end|>", "<| im_end |>")
+            )  # book text can't end a turn
+            body["prompt"] = (
+                "".join(f"<|im_start|>{m['role']}\n{esc(m['content'])}<|im_end|>\n" for m in messages)
                 + "<|im_start|>assistant\n<think>\n\n</think>\n\n"
+            )
             body["stop"] = ["<|im_end|>"]
         with requests.post(url, json=body, stream=True, timeout=(10, int(self.cfg["request_timeout"]))) as r:
             r.encoding = "utf-8"  # SSE responses carry no charset; requests would otherwise decode as Latin-1

@@ -1,5 +1,6 @@
 """The lease protocol (as in the Node bots' kit.js) with real processes against a fake `lms` (written to a temp
 folder below), and config validation. Run with  .venv/bin/python -m unittest discover tests"""
+
 import json
 import os
 import subprocess
@@ -60,7 +61,12 @@ class LeaseTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.state = self.tmp / "lms.json"
-        self.env = {**os.environ, "FAKE_LMS_STATE": str(self.state), "LLM_LEASE_DIR": str(self.tmp / "leases"), "PYTHONWARNINGS": "ignore"}
+        self.env = {
+            **os.environ,
+            "FAKE_LMS_STATE": str(self.state),
+            "LLM_LEASE_DIR": str(self.tmp / "leases"),
+            "PYTHONWARNINGS": "ignore",
+        }
         self.write({"models": [], "loads": 0, "unloads": 0})
         self.lms = self.tmp / "fake_lms.py"
         self.lms.write_text(FAKE_LMS)
@@ -73,8 +79,13 @@ class LeaseTests(unittest.TestCase):
         return json.loads(self.state.read_text())
 
     def worker(self, delay, hold):
-        return subprocess.Popen([sys.executable, "-c", WORKER, str(self.lms), str(delay), str(hold)],
-                                env=self.env, cwd=HERE.parent, stdout=subprocess.PIPE, text=True)
+        return subprocess.Popen(
+            [sys.executable, "-c", WORKER, str(self.lms), str(delay), str(hold)],
+            env=self.env,
+            cwd=HERE.parent,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
 
     def leases(self):
         d = self.tmp / "leases"
@@ -94,8 +105,22 @@ class LeaseTests(unittest.TestCase):
         self.assertEqual(self.leases(), [])
 
     def test_a_model_a_person_loaded_is_reused_and_left(self):
-        self.write({"models": [{"type": "llm", "modelKey": "qwen3.8-27b-mlx", "identifier": "qwen3.8-27b-mlx", "contextLength": 42496,
-                                "status": "idle", "lastUsedTime": time.time() * 1000}], "loads": 0, "unloads": 0})
+        self.write(
+            {
+                "models": [
+                    {
+                        "type": "llm",
+                        "modelKey": "qwen3.8-27b-mlx",
+                        "identifier": "qwen3.8-27b-mlx",
+                        "contextLength": 42496,
+                        "status": "idle",
+                        "lastUsedTime": time.time() * 1000,
+                    }
+                ],
+                "loads": 0,
+                "unloads": 0,
+            }
+        )
         w = self.worker(0, 0.1)
         self.assertEqual(w.stdout.readline().strip(), "acquired")
         w.wait()
@@ -115,13 +140,23 @@ class SkipTests(unittest.TestCase):
     def test_a_book_whose_summary_is_in_the_output_folder_is_skipped(self):
         from distiller import cli
         from distiller.util import sha256_file
+
         tmp = Path(tempfile.mkdtemp())
         book, out = tmp / "b.pdf", tmp / "out"
         book.write_bytes(b"%PDF-1.4 test")
         out.mkdir()
         cli.INDEX_PATH, cli.WORK_DIR = tmp / "index.json", tmp / "work"
-        cli.INDEX_PATH.write_text(json.dumps({sha256_file(book): {"source": "b.pdf", "output": "/old/place/B – Summary.html",
-                                                                   "files": ["/old/place/B – Summary.html"]}}))
+        cli.INDEX_PATH.write_text(
+            json.dumps(
+                {
+                    sha256_file(book): {
+                        "source": "b.pdf",
+                        "output": "/old/place/B – Summary.html",
+                        "files": ["/old/place/B – Summary.html"],
+                    }
+                }
+            )
+        )
         (out / "B – Summary.html").write_text("done")
         cli.process(book, {"notify": False}, None, out)  # skipped: no model, no work folder
         self.assertFalse((cli.WORK_DIR / "b").exists())
@@ -130,18 +165,19 @@ class SkipTests(unittest.TestCase):
             cli.process(book, {"notify": False}, None, out)
         self.assertTrue((cli.WORK_DIR / "b").exists())
 
-
     def test_a_missing_epub_is_rebuilt_only_from_saved_work(self):
         from distiller import cli
         from distiller.util import sha256_file
+
         tmp = Path(tempfile.mkdtemp())
         book, out = tmp / "b.pdf", tmp / "out"
         book.write_bytes(b"%PDF-1.4 test")
         out.mkdir()
         cli.INDEX_PATH, cli.WORK_DIR = tmp / "index.json", tmp / "work"
         files = [str(out / "B – Summary.html"), str(out / "B – Summary.epub")]
-        cli.INDEX_PATH.write_text(json.dumps({sha256_file(book): {"source": "b.pdf", "title": "B", "output": files[0],
-                                                                   "files": files}}))
+        cli.INDEX_PATH.write_text(
+            json.dumps({sha256_file(book): {"source": "b.pdf", "title": "B", "output": files[0], "files": files}})
+        )
         (out / "B – Summary.html").write_text("done")
         cli.process(book, {"notify": False}, None, out)  # EPUB gone but no saved work: skipped, never a full re-run
         self.assertFalse((cli.WORK_DIR / "b").exists())
@@ -154,6 +190,7 @@ class SkipTests(unittest.TestCase):
 
     def test_a_missing_book_is_logged_once(self):
         from distiller import cli
+
         tmp = Path(tempfile.mkdtemp())
         cli.INDEX_PATH, cli.WORK_DIR = tmp / "index.json", tmp / "work"
         with self.assertLogs(cli.log, "ERROR") as logs:
@@ -161,12 +198,15 @@ class SkipTests(unittest.TestCase):
                 cli.process(tmp / "gone.pdf", {"notify": False}, None, tmp / "out")
         self.assertEqual(sum("✗ gone.pdf failed" in m for m in logs.output), 1)
 
+
 class ConfigTests(unittest.TestCase):
     def test_validation_and_profile(self):
         p = Path(tempfile.mkdtemp()) / "config.json"
         p.write_text(json.dumps({"_comment": "x", "temperature": 0, "image_cap": 5}))
         cfg = load_config(p)
-        self.assertEqual((cfg["temperature"], cfg["image_cap"], cfg["context_length"], cfg["parallel"]), (0, 5, 16384, 2))
+        self.assertEqual(
+            (cfg["temperature"], cfg["image_cap"], cfg["context_length"], cfg["parallel"]), (0, 5, 16384, 2)
+        )
         p.write_text(json.dumps({"image_cap": "5", "context_length": 4096, "notify": 1}))
         with self.assertRaises(DistillerError) as e:
             load_config(p)

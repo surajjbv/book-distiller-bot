@@ -1,4 +1,5 @@
 """Turn a Doc into chapter-sized chunks (TOC → headings → fixed size), skipping front/back matter."""
+
 from __future__ import annotations
 
 import math
@@ -15,28 +16,36 @@ SKIP_EXACT = re.compile(
     r"table of contents|glossary|illustrations|figures|tables|dedication|epigraph|cover|title page|"
     r"half title|copyright|copyright page|imprint|colophon|credits|permissions|footnotes|"
     r"selected bibliography|notes and sources|works cited|about this book|also available)\s*\.?\s*$",
-    re.I)
+    re.I,
+)
 SKIP_PREFIX = re.compile(
     r"^\s*(acknowledge?ments?|about the authors?|about the publisher|also by|other books by|books by|"
     r"praise for|list of (figures|illustrations|tables|abbreviations)|further reading|copyright|"
     r"the full project gutenberg|project gutenberg|start of the project|end of the project|"
     r"newsletter|sign up|discover more|reading group guide|a note on sources|photo credits|"
     r"image credits|by the same author|contents)\b",
-    re.I)
+    re.I,
+)
 SKIP_ANY = re.compile(r"project gutenberg|gutenberg (e-?text|ebook|license)", re.I)
 NUMBERED = re.compile(r"^\s*((chapter|ch\.?|lesson|step)\s*[\dIVXLC]+\b|\d{1,3}\s*[.:)\-–—]\s+\S)", re.I)
 INDEX_LINE = re.compile(r"^.{2,100}?,?\s\d+(\s*[-–,]\s*\d+)*\.?$")
-FRONT = re.compile(r"^\s*(preface|foreword|introduction|intro\b|prologue|prelude|author'?s note|"
-                   r"a note to (the )?reader|how to (use|read) this book|overture)", re.I)
-BACK = re.compile(r"^\s*(epilogue|afterword|conclusion|appendix|postscript|coda|final thoughts|"
-                  r"closing thoughts|summary)", re.I)
+FRONT = re.compile(
+    r"^\s*(preface|foreword|introduction|intro\b|prologue|prelude|author'?s note|"
+    r"a note to (the )?reader|how to (use|read) this book|overture)",
+    re.I,
+)
+BACK = re.compile(
+    r"^\s*(epilogue|afterword|conclusion|appendix|postscript|coda|final thoughts|"
+    r"closing thoughts|summary)",
+    re.I,
+)
 
 
 @dataclass
 class Chunk:
     index: int
     title: str
-    kind: str          # front | chapter | back
+    kind: str  # front | chapter | back
     start: int
     end: int
     tokens: int
@@ -92,8 +101,9 @@ def _pick_level(doc: Doc, hs: list, chunk_tokens: int) -> int:
     chosen = levels[0]
     for lv in levels:
         sel = [h for h in hs if h.level <= lv]
-        sizes = [est_tokens(doc.text[a.offset:b.offset]) for a, b in zip(sel, sel[1:] + [None])
-                 if b is not None] + [est_tokens(doc.text[sel[-1].offset:doc.content_end])]
+        sizes = [est_tokens(doc.text[a.offset : b.offset]) for a, b in zip(sel, sel[1:] + [None]) if b is not None] + [
+            est_tokens(doc.text[sel[-1].offset : doc.content_end])
+        ]
         real = [s for h, s in zip(sel, sizes) if classify(h.title) != "skip" and s >= 300]
         chosen = lv
         if len(real) >= 4 and statistics.median(real) <= 2 * chunk_tokens:
@@ -121,7 +131,7 @@ def build_chunks(doc: Doc, cfg: dict) -> list:
         level = _pick_level(doc, hs, chunk_tokens)
         hs = [h for h in hs if h.level <= level]
         log.info("Chunking by %s headings (level ≤ %d): %d sections", doc.heading_source, level, len(hs))
-        if est_tokens(doc.text[start:hs[0].offset]) >= 400:
+        if est_tokens(doc.text[start : hs[0].offset]) >= 400:
             sections.append(["Opening", "front", start, hs[0].offset])
         for a, b in zip(hs, hs[1:] + [None]):
             sections.append([a.title, classify(a.title), a.offset, b.offset if b else end])
@@ -148,7 +158,7 @@ def build_chunks(doc: Doc, cfg: dict) -> list:
         if carry is not None and carry[1] == sec[2]:
             sec[2] = carry[0]
         carry = None
-        if est_tokens(doc.text[sec[2]:sec[3]]) < 150 and sec is not kept[-1]:
+        if est_tokens(doc.text[sec[2] : sec[3]]) < 150 and sec is not kept[-1]:
             carry = (sec[2], sec[3])
             continue
         folded.append(sec)
@@ -159,10 +169,9 @@ def build_chunks(doc: Doc, cfg: dict) -> list:
         item = {"titles": [title], "kind": kind, "start": a, "end": b}
         if merged:
             prev = merged[-1]
-            prev_t = est_tokens(doc.text[prev["start"]:prev["end"]])
+            prev_t = est_tokens(doc.text[prev["start"] : prev["end"]])
             cur_t = est_tokens(doc.text[a:b])
-            if (cur_t < min_tokens or prev_t < min_tokens) and prev_t + cur_t <= chunk_tokens \
-                    and prev["end"] == a:
+            if (cur_t < min_tokens or prev_t < min_tokens) and prev_t + cur_t <= chunk_tokens and prev["end"] == a:
                 prev["titles"].append(title)
                 prev["end"] = b
                 if prev["kind"] != "chapter" and kind == "chapter":
@@ -179,9 +188,19 @@ def build_chunks(doc: Doc, cfg: dict) -> list:
         spans = _split_spans(doc.text, a, b, n) if n > 1 else [(a, b)]
         for k, (s, e) in enumerate(spans):
             t = f"{title} (part {k + 1}/{len(spans)})" if len(spans) > 1 else title
-            chunks.append(Chunk(index=len(chunks) + 1, title=t, kind=item["kind"], start=s, end=e,
-                                tokens=est_tokens(doc.text[s:e]), page_first=doc.page_at(s),
-                                page_last=doc.page_at(max(s, e - 1)), titles=item["titles"]))
+            chunks.append(
+                Chunk(
+                    index=len(chunks) + 1,
+                    title=t,
+                    kind=item["kind"],
+                    start=s,
+                    end=e,
+                    tokens=est_tokens(doc.text[s:e]),
+                    page_first=doc.page_at(s),
+                    page_last=doc.page_at(max(s, e - 1)),
+                    titles=item["titles"],
+                )
+            )
     log.info("Chunks: %d (%s tokens total)", len(chunks), f"{sum(c.tokens for c in chunks):,}")
     return chunks
 
@@ -210,7 +229,7 @@ def _split_spans(text: str, a: int, b: int, n: int) -> list:
 def chunk_text_for_llm(doc: Doc, c: Chunk) -> str:
     """Chunk text with [p. N] markers at page boundaries so the model can cite pages."""
     if not doc.pages:
-        return doc.text[c.start:c.end]
+        return doc.text[c.start : c.end]
     out, pos = [], c.start
     first = doc.page_at(c.start)
     if first:
@@ -220,7 +239,7 @@ def chunk_text_for_llm(doc: Doc, c: Chunk) -> str:
             out.append(doc.text[pos:off])
             out.append(f"[p. {label}] ")
             pos = off
-    out.append(doc.text[pos:c.end])
+    out.append(doc.text[pos : c.end])
     return "".join(out)
 
 

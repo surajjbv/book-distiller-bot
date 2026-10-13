@@ -1,4 +1,5 @@
 """EPUB 3 / Kindle Scribe generator for book-distiller-bot."""
+
 from __future__ import annotations
 
 import html
@@ -40,9 +41,9 @@ dl.cheat dt{font-weight:bold;margin-top:.8em} dl.cheat dd{margin:0 0 .8em 1.2em;
 
 def _page(title: str, body: str) -> str:
     return (
-        '<!DOCTYPE html>\n'
+        "<!DOCTYPE html>\n"
         '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en" lang="en">\n'
-        '<head>\n'
+        "<head>\n"
         '<meta charset="utf-8" />\n'
         f"<title>{html.escape(title)}</title>\n"
         '<link rel="stylesheet" href="style/style.css" type="text/css" />\n'
@@ -52,8 +53,9 @@ def _page(title: str, body: str) -> str:
     )
 
 
-def build_epub(doc: Doc, chunks: list[Chunk], notes: dict, synth: dict, figures: list[dict], read_minutes: int,
-               workdir: Path) -> bytes:
+def build_epub(
+    doc: Doc, chunks: list[Chunk], notes: dict, synth: dict, figures: list[dict], read_minutes: int, workdir: Path
+) -> bytes:
     """The same summary as the HTML (overview, chapters, frameworks, stories, takeaways, cheat sheet) as EPUB 3."""
     book = epub.EpubBook()
     book.set_identifier(f"urn:uuid:{uuid.uuid5(uuid.NAMESPACE_DNS, doc.title + (doc.author or ''))}")
@@ -80,22 +82,33 @@ def build_epub(doc: Doc, chunks: list[Chunk], notes: dict, synth: dict, figures:
     for k, f in enumerate(figures or []):
         p = workdir / "images" / (f.get("file") or "")
         if f.get("file") and p.is_file():
-            book.add_item(epub.EpubItem(uid=f"fig_{k}", file_name=f"images/{f['file']}",
-                                        media_type=f.get("mime") or "image/png", content=p.read_bytes()))
+            book.add_item(
+                epub.EpubItem(
+                    uid=f"fig_{k}",
+                    file_name=f"images/{f['file']}",
+                    media_type=f.get("mime") or "image/png",
+                    content=p.read_bytes(),
+                )
+            )
             figs.setdefault(f.get("chunk"), []).append(f)
 
     # 1. Overview
-    lines = [f"<h1>{xml_md(doc.title)}</h1>",
-             '<p class="meta">' + (f"<strong>{xml_md(doc.author)}</strong> · " if doc.author else "")
-             + f"{len(chunks)} sections · ~{read_minutes} min read</p>"]
+    lines = [
+        f"<h1>{xml_md(doc.title)}</h1>",
+        '<p class="meta">'
+        + (f"<strong>{xml_md(doc.author)}</strong> · " if doc.author else "")
+        + f"{len(chunks)} sections · ~{read_minutes} min read</p>",
+    ]
     if s.get("tldr"):
         lines += ["<h2>TL;DR</h2>", ul(s["tldr"], "ol")]
     if s.get("core_thesis"):
-        lines.append(f'<h2>Core thesis</h2><p>{xml_md(s["core_thesis"])}</p>')
+        lines.append(f"<h2>Core thesis</h2><p>{xml_md(s['core_thesis'])}</p>")
     if s.get("themes"):
         lines.append("<h2>Themes</h2>")
-        lines += [f'<div class="card"><h3>{xml_md(t.get("name"))}</h3><p>{xml_md(t.get("explanation"))}</p></div>'
-                  for t in s["themes"]]
+        lines += [
+            f'<div class="card"><h3>{xml_md(t.get("name"))}</h3><p>{xml_md(t.get("explanation"))}</p></div>'
+            for t in s["themes"]
+        ]
     cr = s.get("critique") or {}
     if cr:
         lines.append("<h2>Critique</h2>")
@@ -115,52 +128,101 @@ def build_epub(doc: Doc, chunks: list[Chunk], notes: dict, synth: dict, figures:
         if n.get("core_idea"):
             lines.append(f'<div class="core-idea">{xml_md(n["core_idea"])}</div>')
         if n.get("summary"):
-            lines.append(f'<p>{xml_md(n["summary"])}</p>')
+            lines.append(f"<p>{xml_md(n['summary'])}</p>")
         if n.get("key_arguments"):
             lines += ["<h3>Key arguments</h3>", ul(n["key_arguments"])]
         for fw in n.get("frameworks") or []:
-            lines.append(f'<div class="framework"><h4>{xml_md(fw.get("name"))}</h4><p>{xml_md(fw.get("description"))}</p>'
-                         + (ul(fw["steps"], "ol") if fw.get("steps") else "") + "</div>")
+            lines.append(
+                f'<div class="framework"><h4>{xml_md(fw.get("name"))}</h4><p>{xml_md(fw.get("description"))}</p>'
+                + (ul(fw["steps"], "ol") if fw.get("steps") else "")
+                + "</div>"
+            )
         if n.get("data_points"):
-            lines.append("<h3>Data &amp; evidence</h3><ul>" + "".join(
-                f'<li><strong>{xml_md(d.get("fact"))}</strong>' + (f' — {xml_md(d["context"])}' if d.get("context") else "")
-                + "</li>" for d in n["data_points"]) + "</ul>")
+            lines.append(
+                "<h3>Data &amp; evidence</h3><ul>"
+                + "".join(
+                    f"<li><strong>{xml_md(d.get('fact'))}</strong>"
+                    + (f" — {xml_md(d['context'])}" if d.get("context") else "")
+                    + "</li>"
+                    for d in n["data_points"]
+                )
+                + "</ul>"
+            )
         for ex in n.get("examples") or []:
-            lines.append(f'<div class="story"><strong>{xml_md(ex.get("title"))}</strong><p>{xml_md(ex.get("story"))}</p>'
-                         + (f'<p><em>Lesson:</em> {xml_md(ex["lesson"])}</p>' if ex.get("lesson") else "") + "</div>")
+            lines.append(
+                f'<div class="story"><strong>{xml_md(ex.get("title"))}</strong><p>{xml_md(ex.get("story"))}</p>'
+                + (f"<p><em>Lesson:</em> {xml_md(ex['lesson'])}</p>" if ex.get("lesson") else "")
+                + "</div>"
+            )
         if n.get("takeaways"):
             lines += ["<h3>Takeaways</h3>", ul(n["takeaways"])]
         for f in figs.get(c.index, []):
-            pg = f' · p. {html.escape(str(f["page"]))}' if f.get("page") else ""
-            lines.append(f'<figure><img src="images/{html.escape(f["file"])}" alt="{html.escape(f.get("caption") or "Figure")}" />'
-                         f'<figcaption>{xml_md(f.get("caption"))}{pg}</figcaption></figure>')
+            pg = f" · p. {html.escape(str(f['page']))}" if f.get("page") else ""
+            lines.append(
+                f'<figure><img src="images/{html.escape(f["file"])}" alt="{html.escape(f.get("caption") or "Figure")}" />'
+                f"<figcaption>{xml_md(f.get('caption'))}{pg}</figcaption></figure>"
+            )
         if n.get("quotes"):
             lines.append("<h3>Quotes</h3>")
-            lines += [f'<blockquote>“{xml_md(q.get("text"))}”<span class="src">'
-                      + (f'p. {xml_md(q["page"])}' if q.get("page") else xml_md(c.title)) + "</span></blockquote>"
-                      for q in n["quotes"]]
+            lines += [
+                f'<blockquote>“{xml_md(q.get("text"))}”<span class="src">'
+                + (f"p. {xml_md(q['page'])}" if q.get("page") else xml_md(c.title))
+                + "</span></blockquote>"
+                for q in n["quotes"]
+            ]
         add(f"{c.index}. {c.title}", f"ch_{c.index:02d}.xhtml", lines)
 
     # 3. Book-level sections
     if s.get("frameworks"):
-        add("Frameworks", "frameworks.xhtml", ["<h1>Frameworks</h1>"] + [
-            f'<div class="framework"><h2>{xml_md(f.get("name"))}</h2><p>{xml_md(f.get("what"))}</p>'
-            + (f'<p><strong>How to apply:</strong> {xml_md(f["how_to_apply"])}</p>' if f.get("how_to_apply") else "")
-            + "</div>" for f in s["frameworks"]])
+        add(
+            "Frameworks",
+            "frameworks.xhtml",
+            ["<h1>Frameworks</h1>"]
+            + [
+                f'<div class="framework"><h2>{xml_md(f.get("name"))}</h2><p>{xml_md(f.get("what"))}</p>'
+                + (
+                    f"<p><strong>How to apply:</strong> {xml_md(f['how_to_apply'])}</p>"
+                    if f.get("how_to_apply")
+                    else ""
+                )
+                + "</div>"
+                for f in s["frameworks"]
+            ],
+        )
     if s.get("key_stories"):
-        add("Key stories", "stories.xhtml", ["<h1>Key stories</h1>"] + [
-            f'<div class="story"><h3>{xml_md(k.get("title"))}</h3><p>{xml_md(k.get("story"))}</p>'
-            + (f'<p><em>Lesson:</em> {xml_md(k["lesson"])}</p>' if k.get("lesson") else "")
-            + (f'<p class="meta">{xml_md(k["chapter"])}</p>' if k.get("chapter") else "") + "</div>"
-            for k in s["key_stories"]])
+        add(
+            "Key stories",
+            "stories.xhtml",
+            ["<h1>Key stories</h1>"]
+            + [
+                f'<div class="story"><h3>{xml_md(k.get("title"))}</h3><p>{xml_md(k.get("story"))}</p>'
+                + (f"<p><em>Lesson:</em> {xml_md(k['lesson'])}</p>" if k.get("lesson") else "")
+                + (f'<p class="meta">{xml_md(k["chapter"])}</p>' if k.get("chapter") else "")
+                + "</div>"
+                for k in s["key_stories"]
+            ],
+        )
     if s.get("takeaways"):
-        add("Takeaways", "takeaways.xhtml", ["<h1>Takeaways</h1><ol>"] + [
-            f'<li><strong>{xml_md(t.get("action"))}</strong>'
-            + (f'<br/><em>Why:</em> {xml_md(t["why"])}' if t.get("why") else "") + "</li>"
-            for t in s["takeaways"]] + ["</ol>"])
+        add(
+            "Takeaways",
+            "takeaways.xhtml",
+            ["<h1>Takeaways</h1><ol>"]
+            + [
+                f"<li><strong>{xml_md(t.get('action'))}</strong>"
+                + (f"<br/><em>Why:</em> {xml_md(t['why'])}" if t.get("why") else "")
+                + "</li>"
+                for t in s["takeaways"]
+            ]
+            + ["</ol>"],
+        )
     if s.get("cheat_sheet"):
-        add("Cheat sheet", "cheat_sheet.xhtml", ['<h1>Cheat sheet</h1><dl class="cheat">'] + [
-            f'<dt>{xml_md(i.get("label"))}</dt><dd>{xml_md(i.get("line"))}</dd>' for i in s["cheat_sheet"]] + ["</dl>"])
+        add(
+            "Cheat sheet",
+            "cheat_sheet.xhtml",
+            ['<h1>Cheat sheet</h1><dl class="cheat">']
+            + [f"<dt>{xml_md(i.get('label'))}</dt><dd>{xml_md(i.get('line'))}</dd>" for i in s["cheat_sheet"]]
+            + ["</dl>"],
+        )
 
     book.toc = tuple(toc)
     book.add_item(epub.EpubNcx())

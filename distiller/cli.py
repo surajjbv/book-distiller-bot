@@ -1,4 +1,5 @@
 """Command line: ./run.sh [book] [--force] [--from STEP] | watch | preflight"""
+
 from __future__ import annotations
 
 import argparse
@@ -16,8 +17,21 @@ from tqdm import tqdm
 
 from .llm import LMStudio, ModelBusy
 from .pipeline import STEPS, BookJob, epub_name
-from .util import (BOOK_EXTS, WORK_DIR, DistillerError, add_file_log, book_dirs,
-                   load_config, log, notify, read_json, remove_log, sha256_file, slugify, write_json)
+from .util import (
+    BOOK_EXTS,
+    WORK_DIR,
+    DistillerError,
+    add_file_log,
+    book_dirs,
+    load_config,
+    log,
+    notify,
+    read_json,
+    remove_log,
+    sha256_file,
+    slugify,
+    write_json,
+)
 
 INDEX_PATH = WORK_DIR / "index.json"
 LOCK_PATH = WORK_DIR / ".lock"
@@ -35,8 +49,11 @@ class TqdmHandler(logging.Handler):
 
 
 def input_books(inp: Path) -> list:
-    return sorted(f.resolve() for f in inp.iterdir()
-                  if f.is_file() and f.suffix.lower() in BOOK_EXTS and not f.name.startswith("."))
+    return sorted(
+        f.resolve()
+        for f in inp.iterdir()
+        if f.is_file() and f.suffix.lower() in BOOK_EXTS and not f.name.startswith(".")
+    )
 
 
 def find_book(arg: str, inp: Path) -> Path:
@@ -46,8 +63,11 @@ def find_book(arg: str, inp: Path) -> Path:
     hits = [f for f in input_books(inp) if arg.lower() in f.name.lower()]
     if len(hits) == 1:
         return hits[0]
-    raise DistillerError(f"'{arg}' matches several books: {', '.join(h.name for h in hits)}" if hits
-                         else f"Book not found: {arg} (looked for a path and in {inp})")
+    raise DistillerError(
+        f"'{arg}' matches several books: {', '.join(h.name for h in hits)}"
+        if hits
+        else f"Book not found: {arg} (looked for a path and in {inp})"
+    )
 
 
 def preflight(cfg: dict, llm: LMStudio) -> tuple:
@@ -66,8 +86,11 @@ def process(path: Path, cfg: dict, llm: LMStudio, out: Path, force: bool = False
         done = [out / Path(f).name for f in (entry or {}).get("files") or ([entry["output"]] if entry else [])]
         if done and not (force or from_step) and all(f.exists() for f in done if f.suffix != ".epub"):
             saved = WORK_DIR / slugify(path.stem)
-            if not entry.get("title") or (out / epub_name(entry["title"])).exists() or not all(
-                    (saved / f).exists() for f in ("synthesis.json", "images.json")):
+            if (
+                not entry.get("title")
+                or (out / epub_name(entry["title"])).exists()
+                or not all((saved / f).exists() for f in ("synthesis.json", "images.json"))
+            ):
                 log.info("✓ %s already summarised → %s  (--force to redo)", path.name, done[0].name)
                 return
             log.info("EPUB missing for %s: rebuilding it from saved work (no model needed)", path.name)
@@ -100,13 +123,22 @@ def process(path: Path, cfg: dict, llm: LMStudio, out: Path, force: bool = False
             if stale.name not in {Path(f).name for f in files} and stale.exists():
                 trash(stale)
         index = read_json(INDEX_PATH, {})
-        index[sha] = {"source": path.name, "title": res["title"], "output": files[0], "files": files,
-                      "model": llm.model, "finished": datetime.now().isoformat(timespec="seconds")}
+        index[sha] = {
+            "source": path.name,
+            "title": res["title"],
+            "output": files[0],
+            "files": files,
+            "model": llm.model,
+            "finished": datetime.now().isoformat(timespec="seconds"),
+        }
         write_json(INDEX_PATH, index)
         if cfg.get("notify", True):
             parts = len(res["pages"])
-            notify("book-distiller-bot", f"Summary ready: {res['title']} ({res['read_minutes']} min"
-                                     + (f", {parts} parts)" if parts > 1 else ")"))
+            notify(
+                "book-distiller-bot",
+                f"Summary ready: {res['title']} ({res['read_minutes']} min"
+                + (f", {parts} parts)" if parts > 1 else ")"),
+            )
     except ModelBusy:
         raise
     except Exception as e:
@@ -181,9 +213,25 @@ def main(argv=None) -> int:
 def trash(p: Path) -> None:
     """Move a superseded summary to the Trash (recoverable), not a permanent delete."""
     import subprocess
+
     try:
-        ok = subprocess.run(["osascript", "-e", "on run argv", "-e", 'tell application "Finder" to delete POSIX file (item 1 of argv)',
-                             "-e", "end run", str(p.resolve())], capture_output=True, timeout=10).returncode == 0
+        ok = (
+            subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    "on run argv",
+                    "-e",
+                    'tell application "Finder" to delete POSIX file (item 1 of argv)',
+                    "-e",
+                    "end run",
+                    str(p.resolve()),
+                ],
+                capture_output=True,
+                timeout=10,
+            ).returncode
+            == 0
+        )
     except (OSError, subprocess.TimeoutExpired):
         ok = False
     if ok:
@@ -204,8 +252,10 @@ def single_instance() -> None:
         fcntl.flock(_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         _lock.seek(0)
-        log.error("Another book-distiller-bot run is in progress (pid %s). Wait for it, or stop it first.",
-                  _lock.read().strip() or "?")
+        log.error(
+            "Another book-distiller-bot run is in progress (pid %s). Wait for it, or stop it first.",
+            _lock.read().strip() or "?",
+        )
         sys.exit(1)
     _lock.truncate(0)
     _lock.write(f"{os.getpid()}\n")

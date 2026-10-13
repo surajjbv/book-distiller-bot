@@ -1,4 +1,5 @@
 """Shared helpers: config, folders, logging, token estimates, JSON IO, notifications."""
+
 from __future__ import annotations
 
 import hashlib
@@ -53,6 +54,7 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
     """config.json over DEFAULTS, validated (unknown keys and wrong types are errors); "_comment" keys are ignored.
     context_length and parallel come from the shared load profile, not from the file."""
     from .llm import PROFILE
+
     data = {}
     if path.exists():
         try:
@@ -74,7 +76,9 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
     cfg.update(context_length=PROFILE["context"], parallel=PROFILE["parallel"])
     # Your own folders are personal, so they live in .env (gitignored), not in config.json.
     env = read_env(path.parent / ".env")
-    cfg.update({k: env[e] for k, e in (("input_dir", "BOOKS_INPUT_DIR"), ("output_dir", "BOOKS_OUTPUT_DIR")) if env.get(e)})
+    cfg.update(
+        {k: env[e] for k, e in (("input_dir", "BOOKS_INPUT_DIR"), ("output_dir", "BOOKS_OUTPUT_DIR")) if env.get(e)}
+    )
     return cfg
 
 
@@ -82,7 +86,11 @@ def read_env(path: Path) -> dict:
     """KEY=value lines of a .env file (no file: empty)."""
     if not path.exists():
         return {}
-    pairs = (line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if re.match(r"\s*[A-Z][A-Z0-9_]*\s*=", line))
+    pairs = (
+        line.split("=", 1)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if re.match(r"\s*[A-Z][A-Z0-9_]*\s*=", line)
+    )
     return {k.strip(): v.strip().strip('"').strip("'") for k, v in pairs}
 
 
@@ -91,6 +99,7 @@ def read_style() -> str:
 
 
 # ---------------------------------------------------------------- logging
+
 
 def add_file_log(path: Path) -> logging.Handler:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -108,6 +117,7 @@ def remove_log(h: logging.Handler) -> None:
 
 # ---------------------------------------------------------------- concurrency
 
+
 def pmap(fn, items, workers: int) -> list:
     """Parallel map in input order. On the first error, queued items are cancelled instead of run."""
     ex = ThreadPoolExecutor(max(1, workers))
@@ -119,6 +129,7 @@ def pmap(fn, items, workers: int) -> list:
 
 
 # ---------------------------------------------------------------- text helpers
+
 
 def est_tokens(text: str) -> int:
     """Conservative token estimate (~3.6 chars/token for English prose)."""
@@ -166,6 +177,7 @@ def write_json(path: Path, obj) -> None:
 
 # ---------------------------------------------------------------- folders
 
+
 def book_dirs(cfg: dict) -> tuple:
     """(input, output) folders from config.json (relative to this project unless absolute; ~ allowed), created."""
     dirs = tuple((ROOT / os.path.expanduser(cfg[k])).resolve() for k in ("input_dir", "output_dir"))
@@ -176,10 +188,24 @@ def book_dirs(cfg: dict) -> tuple:
 
 # ---------------------------------------------------------------- notifications
 
+
 def notify(title: str, message: str) -> None:
     try:  # argv, not string interpolation: titles may contain quotes
-        subprocess.run(["osascript", "-e", "on run argv", "-e",
-                        'display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"',
-                        "-e", "end run", str(title), str(message)], check=False, capture_output=True, timeout=10)
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                "on run argv",
+                "-e",
+                'display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"',
+                "-e",
+                "end run",
+                str(title),
+                str(message),
+            ],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
     except Exception:  # notifications are best-effort
         pass

@@ -3,6 +3,7 @@
 Everything downstream works with character offsets into `Doc.text`, so chunking,
 quote verification and figure placement share one coordinate system.
 """
+
 from __future__ import annotations
 
 import bisect
@@ -34,9 +35,9 @@ class Doc:
     title: str
     author: str
     text: str
-    pages: list = field(default_factory=list)       # [[offset, label], ...] sorted by offset
-    headings: list = field(default_factory=list)    # [Heading]
-    images: list = field(default_factory=list)      # EPUB only: [[offset, href]]
+    pages: list = field(default_factory=list)  # [[offset, label], ...] sorted by offset
+    headings: list = field(default_factory=list)  # [Heading]
+    images: list = field(default_factory=list)  # EPUB only: [[offset, href]]
     content_start: int = 0
     content_end: int = 0
     heading_source: str = ""
@@ -68,8 +69,14 @@ def load(path: Path) -> Doc:
     else:
         raise DistillerError(f"Unsupported file type: {path.name} (PDF and EPUB only)")
     _apply_gutenberg_range(doc)
-    log.info("Loaded %s: %s chars, %d pages, %d headings (%s)", path.name, f"{len(doc.text):,}",
-             len(doc.pages), len(doc.headings), doc.heading_source or "none")
+    log.info(
+        "Loaded %s: %s chars, %d pages, %d headings (%s)",
+        path.name,
+        f"{len(doc.text):,}",
+        len(doc.pages),
+        len(doc.headings),
+        doc.heading_source or "none",
+    )
     return doc
 
 
@@ -98,6 +105,7 @@ def _clean_meta(s: str | None) -> str:
 
 
 # ====================================================================== PDF
+
 
 def load_pdf(path: Path) -> Doc:
     import pymupdf as fitz
@@ -146,15 +154,24 @@ def load_pdf(path: Path) -> Doc:
         if chars < max(200, n * 40):
             raise DistillerError(
                 f"{path.name} has no usable text layer (looks scanned: {chars} chars over {n} pages).\n"
-                f"  Fix: OCR it first, e.g.  brew install ocrmypdf && ocrmypdf --skip-text \"{path}\" \"{path.with_stem(path.stem + '-ocr')}\"\n"
-                "  then drop the OCR'd PDF into input/.")
+                f'  Fix: OCR it first, e.g.  brew install ocrmypdf && ocrmypdf --skip-text "{path}" "{path.with_stem(path.stem + "-ocr")}"\n'
+                "  then drop the OCR'd PDF into input/."
+            )
         empty = sum(1 for p in parts if len(p) < 20)
         if empty > n * 0.5:
-            log.warning("%d of %d pages have no text; parts of this PDF may be scanned images (consider ocrmypdf).", empty, n)
+            log.warning(
+                "%d of %d pages have no text; parts of this PDF may be scanned images (consider ocrmypdf).", empty, n
+            )
 
         meta = d.metadata or {}
-        doc = Doc(path=str(path), fmt="pdf", title=_clean_meta(meta.get("title")) or _pretty_stem(path),
-                  author=_clean_meta(meta.get("author")), text=text, pages=pages)
+        doc = Doc(
+            path=str(path),
+            fmt="pdf",
+            title=_clean_meta(meta.get("title")) or _pretty_stem(path),
+            author=_clean_meta(meta.get("author")),
+            text=text,
+            pages=pages,
+        )
 
         def offset_for(page_idx: int, title: str) -> int:
             start = pages[page_idx][0]
@@ -175,7 +192,8 @@ def load_pdf(path: Path) -> Doc:
 CHAPTER_RE = re.compile(
     r"^(chapter|part|book|section|lesson|step)\s+([0-9]+|[ivxlcdm]+|one|two|three|four|five|six|seven|"
     r"eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b",
-    re.I)
+    re.I,
+)
 
 
 def _pdf_font_headings(d, flags, offset_for) -> list:
@@ -214,8 +232,11 @@ def _pdf_font_headings(d, flags, offset_for) -> list:
             out.append(Heading(offset_for(p, t), title, level, "heading"))
         return out
 
-    big = [(k, l) for k, l in enumerate(lines)
-           if l[2] >= body * 1.25 and len(l[1]) < 100 and re.search(r"[A-Za-z]{3}", l[1])]
+    big = [
+        (k, l)
+        for k, l in enumerate(lines)
+        if l[2] >= body * 1.25 and len(l[1]) < 100 and re.search(r"[A-Za-z]{3}", l[1])
+    ]
     by_size = Counter(l[2] for _, l in big)
     for size in sorted(by_size, reverse=True):
         if 3 <= by_size[size] <= max(3, len(d) * 0.6):
@@ -239,9 +260,36 @@ def _pretty_stem(path: Path) -> str:
 
 # ====================================================================== EPUB
 
-BLOCK_TAGS = {"p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "section", "article",
-              "tr", "br", "pre", "figure", "figcaption", "dt", "dd", "table", "ul", "ol", "header",
-              "footer", "aside", "nav", "hr", "body"}
+BLOCK_TAGS = {
+    "p",
+    "div",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "li",
+    "blockquote",
+    "section",
+    "article",
+    "tr",
+    "br",
+    "pre",
+    "figure",
+    "figcaption",
+    "dt",
+    "dd",
+    "table",
+    "ul",
+    "ol",
+    "header",
+    "footer",
+    "aside",
+    "nav",
+    "hr",
+    "body",
+}
 SKIP_TAGS = {"script", "style", "head", "title", "svg", "math", "noscript"}
 
 
@@ -274,6 +322,7 @@ def _walk_html(html: bytes, tb: _TextBuilder, on_anchor, on_page, on_image) -> N
     import warnings
 
     from bs4 import BeautifulSoup, Comment, NavigableString, Tag, XMLParsedAsHTMLWarning
+
     warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)  # XHTML parses fine as HTML
 
     soup = BeautifulSoup(html, "lxml")
@@ -345,21 +394,29 @@ def load_epub(path: Path) -> Doc:
         doc_start[name] = tb.n
         base = posixpath.dirname(name)
         _walk_html(
-            item.get_content(), tb,
+            item.get_content(),
+            tb,
             on_anchor=lambda a, o, name=name: anchors.setdefault((name, a), o),
             on_page=lambda label, o: pages.append([o, label]),
             on_image=lambda src, o, base=base: images.append(
-                [o, posixpath.normpath(posixpath.join(base, unquote(src.split("#")[0])))]),
+                [o, posixpath.normpath(posixpath.join(base, unquote(src.split("#")[0])))]
+            ),
         )
         heading = re.search(rb"<h[1-3][^>]*>(.*?)</h[1-3]>", item.get_content(), re.S | re.I)
         if heading:
-            spine_titles.append((doc_start[name], re.sub(r"<[^>]+>|\s+", " ", heading.group(1).decode("utf-8", "ignore")).strip()))
+            spine_titles.append(
+                (doc_start[name], re.sub(r"<[^>]+>|\s+", " ", heading.group(1).decode("utf-8", "ignore")).strip())
+            )
     text = "".join(tb.parts)
 
     def resolve(href: str) -> int | None:
         href = unquote(href or "")
         file, _, frag = href.partition("#")
-        cands = [n for n in doc_start if n == file or n.endswith("/" + file) or posixpath.basename(n) == posixpath.basename(file)]
+        cands = [
+            n
+            for n in doc_start
+            if n == file or n.endswith("/" + file) or posixpath.basename(n) == posixpath.basename(file)
+        ]
         if not cands:
             return None
         name = cands[0]
@@ -395,6 +452,14 @@ def load_epub(path: Path) -> Doc:
         return v[0][0] if v else ""
 
     pages.sort(key=lambda p: p[0])
-    return Doc(path=str(path), fmt="epub", title=_clean_meta(meta("title")) or _pretty_stem(path),
-               author=_clean_meta(meta("creator")), text=text, pages=pages,
-               headings=sorted(headings, key=lambda h: h.offset), images=images, heading_source=source)
+    return Doc(
+        path=str(path),
+        fmt="epub",
+        title=_clean_meta(meta("title")) or _pretty_stem(path),
+        author=_clean_meta(meta("creator")),
+        text=text,
+        pages=pages,
+        headings=sorted(headings, key=lambda h: h.offset),
+        images=images,
+        heading_source=source,
+    )
