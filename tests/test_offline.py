@@ -85,7 +85,7 @@ class ChunkTests(unittest.TestCase):
         self.assertEqual(len(spans), 3)
         self.assertEqual(spans[0][0], 0)
         self.assertEqual(spans[-1][1], len(text))
-        for s, e in spans[1:]:
+        for s, _e in spans[1:]:
             self.assertTrue(text[s:].startswith("Paragraph"))
 
 
@@ -324,7 +324,7 @@ class HardeningTests(unittest.TestCase):
             data = build_epub(make_doc(), chunks, notes, {"synthesis": synth}, figures, 20, Path(d))
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             pages = {n: z.read(n) for n in z.namelist() if n.endswith(".xhtml")}
-        for n, b in pages.items():
+        for b in pages.values():
             etree.fromstring(b)  # well-formed XHTML, or this raises
         text = "".join(b.decode() for b in pages.values())
         missing = [v for v in leaves(note) + leaves(synth) if v not in text]

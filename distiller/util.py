@@ -58,7 +58,7 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
-            raise DistillerError(f"{path.name}: {e}")
+            raise DistillerError(f"{path.name}: {e}") from e
     problems = []
     for k, v in data.items():
         if k.startswith("_"):

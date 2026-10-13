@@ -161,7 +161,7 @@ class Synthesizer:
             def condense(arg):
                 gi, group = arg
                 label = group[0][1].split("–")[0] + ("–" + group[-1][1].split("–")[-1].replace("Ch ", "") if len(group) > 1 else "")
-                path = self.dir / f"group_r{rnd}_{gi:02d}.json"
+                path = self.dir / f"group_r{rnd}_{gi:02d}.json"  # noqa: B023 (pmap finishes before the loop moves on)
                 g = read_json(path)
                 if g is None:
                     notes_text = "\n\n".join(t for t, _ in group)

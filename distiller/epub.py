@@ -86,7 +86,7 @@ def build_epub(doc: Doc, chunks: list[Chunk], notes: dict, synth: dict, figures:
 
     # 1. Overview
     lines = [f"<h1>{xml_md(doc.title)}</h1>",
-             f'<p class="meta">' + (f"<strong>{xml_md(doc.author)}</strong> · " if doc.author else "")
+             '<p class="meta">' + (f"<strong>{xml_md(doc.author)}</strong> · " if doc.author else "")
              + f"{len(chunks)} sections · ~{read_minutes} min read</p>"]
     if s.get("tldr"):
         lines += ["<h2>TL;DR</h2>", ul(s["tldr"], "ol")]

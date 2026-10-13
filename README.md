@@ -133,6 +133,7 @@ distiller/        the run, one module per step: ingest → chunk → plan → ex
                   pipeline (steps, resume), epub (e-reader copy), cli (commands, folders), llm (model sharing, requests), util
 templates/        summary.html.j2 (the page layout)
 tests/            test_offline.py (chunking, quotes, rendering) · test_lease.py (model sharing, config)
+pyproject.toml    project info and ruff settings   requirements-dev.txt  ruff   .github/workflows/ci.yml  CI
 style.md          the voice of your summaries      config.json   settings (validated on load)   .env / .env.example  your input and output folders
 run.sh            ./run.sh [book] [--force] [--from STEP] | watch | preflight (creates .venv on first run)
 run-now.command   double-click = ./run.sh           pii-check.sh  personal-data gate before a commit
@@ -145,6 +146,9 @@ work/<book>/      (gitignored) doc.json, chunks.json, plan.json, notes/, synthes
 #### When something goes wrong
 
 A failed book shows a macOS notification. Details: `work/<book>/run.log` (every step, with the error). `.venv/bin/python -m unittest discover tests` checks the code without the model.
+
+**Code checks** (also run by GitHub CI on every push, on Python 3.9 and 3.14):
+`.venv/bin/pip install -r requirements-dev.txt`, then `.venv/bin/ruff check .` (bugs) and `.venv/bin/ruff format .` (layout).
 
 
 - **Not enough free memory for qwen3.8-27b-mlx**: quit other apps (Chrome is usually the biggest) and run again.

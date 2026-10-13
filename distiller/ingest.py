@@ -207,7 +207,7 @@ def _pdf_font_headings(d, flags, offset_for) -> list:
     hits = [(k, l) for k, l in enumerate(lines) if CHAPTER_RE.match(l[1]) and len(l[1]) < 90]
     if len(hits) >= 3:
         out = []
-        for k, (p, t, s) in hits:
+        for k, (p, t, _s) in hits:
             sub = subtitle(k)
             title = f"{t} — {sub}" if sub else t
             level = 0 if t.lower().startswith("part") else 1
@@ -221,7 +221,7 @@ def _pdf_font_headings(d, flags, offset_for) -> list:
         if 3 <= by_size[size] <= max(3, len(d) * 0.6):
             sel = [(k, l) for k, l in big if abs(l[2] - size) < 0.6]
             out, last = [], (-1, -9)
-            for k, (p, t, s) in sel:
+            for k, (p, t, _s) in sel:
                 if p == last[0] and k - last[1] <= 2 and out:  # multi-line heading
                     out[-1].title += " " + t
                 else:
@@ -327,7 +327,7 @@ def load_epub(path: Path) -> Doc:
     try:
         book = epub.read_epub(str(path), {"ignore_ncx": False})
     except Exception as e:
-        raise DistillerError(f"Could not open {path.name} as EPUB: {e}")
+        raise DistillerError(f"Could not open {path.name} as EPUB: {e}") from e
 
     tb = _TextBuilder()
     doc_start: dict = {}

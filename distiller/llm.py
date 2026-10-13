@@ -315,7 +315,7 @@ class LMStudio:
                 try:
                     ev = json.loads(data)
                 except json.JSONDecodeError as e:
-                    raise requests.HTTPError(f"LM Studio malformed SSE: {e}")
+                    raise requests.HTTPError(f"LM Studio malformed SSE: {e}") from e
                 if ev.get("error"):
                     raise requests.HTTPError(f"LM Studio: {str(ev['error'])[:300]}")
                 usage = ev.get("usage") or usage

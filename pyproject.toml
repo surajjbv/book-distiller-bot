@@ -1,0 +1,18 @@
+[project]
+name = "book-distiller-bot"
+version = "1.0.0"
+description = "Drop a book in a folder; get a faithful, readable summary (HTML + EPUB) back, with every quote checked."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+# Dependencies live in requirements.txt (run.sh installs them).
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["F", "E9", "B"]  # real bugs only: pyflakes, syntax errors, bugbear
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B017"]  # tests may expect any exception on purpose
