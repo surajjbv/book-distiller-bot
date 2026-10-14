@@ -149,6 +149,8 @@ A failed book shows a macOS notification. Details: `work/<book>/run.log` (every 
 
 **Code checks** (also run by GitHub CI on every push, on Python 3.9 and 3.14):
 `.venv/bin/pip install -r requirements-dev.txt`, then `.venv/bin/ruff check .` (bugs) and `.venv/bin/ruff format .` (layout).
+A pre-commit hook runs them, the tests and pii-check.sh automatically; turn it on once per clone with
+`git config core.hooksPath .githooks`.
 
 
 - **Not enough free memory for qwen3.8-27b-mlx**: quit other apps (Chrome is usually the biggest) and run again.

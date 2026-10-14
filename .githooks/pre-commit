@@ -1,0 +1,10 @@
+#!/bin/bash
+# Pre-commit gate: format check, lint, tests, then the personal-data check. Enable once per clone with
+#   git config core.hooksPath .githooks
+set -u
+cd "$(git rev-parse --show-toplevel)" || exit 1
+fail() { echo "pre-commit: $1" >&2; exit 1; }
+.venv/bin/ruff format --check -q . || fail "layout needs fixing: run .venv/bin/ruff format . and stage the result"
+.venv/bin/ruff check -q . || fail "lint found problems (above)"
+out=$(.venv/bin/python -m unittest discover -s tests 2>&1) || { echo "$out" | tail -40 >&2; fail "tests failed"; }
+bash pii-check.sh . || fail "personal data staged (above)"
