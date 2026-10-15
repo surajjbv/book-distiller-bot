@@ -154,7 +154,7 @@ class LMStudio:
                 )
         try:
             keys = {m["modelKey"] for m in json.loads(self._run("ls", "--json", timeout=60))}
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             keys = set()
         if self.model not in keys:
             raise DistillerError(

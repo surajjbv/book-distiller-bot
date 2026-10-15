@@ -163,7 +163,7 @@ def sha256_file(path: Path) -> str:
 def read_json(path: Path, default=None):
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError, json.JSONDecodeError:
         return default
 
 

@@ -232,7 +232,7 @@ def trash(p: Path) -> None:
             ).returncode
             == 0
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         ok = False
     if ok:
         log.info("  moved superseded %s to the Trash", p.name)

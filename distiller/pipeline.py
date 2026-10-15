@@ -227,7 +227,9 @@ class BookJob:
                 )
 
         sizes = [word_count({"chapters": [chapters[c.index]], "quotes": quotes[c.index]}) for c in chunks]
-        part_of = dict(zip([c.index for c in chunks], split_parts(sizes, plan["parts"], word_count(book))))
+        part_of = dict(
+            zip([c.index for c in chunks], split_parts(sizes, plan["parts"], word_count(book)), strict=False)
+        )
         n = max(part_of.values())
         names = [output_name(doc.title, k, n) for k in range(1, n + 1)]
         pages = []

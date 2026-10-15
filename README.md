@@ -49,7 +49,7 @@ time; the next run picks up where it left off. You get a Mac notification when a
   </tr>
 </table>
 
-Needs a Mac with Python 3.9+ and [LM Studio](https://lmstudio.ai) with Qwen3.8 27B.
+Needs a Mac with Python 3.14+ and [LM Studio](https://lmstudio.ai) with Qwen3.8 27B.
 
 ## 🔒 Private by design
 
@@ -62,7 +62,7 @@ Google Drive. Your folder paths live in `.env` and are never committed.
 <br>
 
 <p>
-  <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square" alt="Python">
+  <img src="https://img.shields.io/badge/Python-3.14%2B-3776AB?style=flat-square" alt="Python">
   <img src="https://img.shields.io/badge/LM%20Studio-Qwen3.8%2027B-5A0FC8?style=flat-square" alt="LM Studio">
   <img src="https://img.shields.io/badge/PyMuPDF%20%C2%B7%20ebooklib-ingest-000000?style=flat-square" alt="PyMuPDF and ebooklib">
 </p>
@@ -147,7 +147,7 @@ work/<book>/      (gitignored) doc.json, chunks.json, plan.json, notes/, synthes
 
 A failed book shows a macOS notification. Details: `work/<book>/run.log` (every step, with the error). `.venv/bin/python -m unittest discover tests` checks the code without the model.
 
-**Code checks** (also run by GitHub CI on every push, on Python 3.9 and 3.14):
+**Code checks** (also run by GitHub CI on every push, on Python 3.14):
 `.venv/bin/pip install -r requirements-dev.txt`, then `.venv/bin/ruff check .` (bugs) and `.venv/bin/ruff format .` (layout).
 A pre-commit hook runs them, the tests and pii-check.sh automatically; turn it on once per clone with
 `git config core.hooksPath .githooks`.

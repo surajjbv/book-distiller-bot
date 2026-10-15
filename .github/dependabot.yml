@@ -1,0 +1,13 @@
+# Dependency update pull requests, once a month, grouped; versions must be 2+ weeks old (cooldown).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+    cooldown: { default-days: 14 }
+    groups: { actions: { patterns: ["*"] } }
+  - package-ecosystem: pip
+    directory: /
+    schedule: { interval: monthly }
+    cooldown: { default-days: 14 }
+    groups: { dependencies: { patterns: ["*"] } }

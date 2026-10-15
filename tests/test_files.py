@@ -57,7 +57,7 @@ class FileIngestMixin:
         )
         self.assertEqual([x.kind for x in c], ["front", "chapter", "chapter", "chapter"])
         self.assertEqual([x.index for x in c], [1, 2, 3, 4])
-        for a, b in zip(c, c[1:]):
+        for a, b in zip(c, c[1:], strict=False):
             self.assertEqual(a.end, b.start)  # contiguous, no gaps or overlaps
         self.assertEqual(c[0].start, self.doc.headings[0].offset)
         self.assertEqual(c[-1].end, self.doc.content_end)

@@ -101,10 +101,12 @@ def _pick_level(doc: Doc, hs: list, chunk_tokens: int) -> int:
     chosen = levels[0]
     for lv in levels:
         sel = [h for h in hs if h.level <= lv]
-        sizes = [est_tokens(doc.text[a.offset : b.offset]) for a, b in zip(sel, sel[1:] + [None]) if b is not None] + [
-            est_tokens(doc.text[sel[-1].offset : doc.content_end])
-        ]
-        real = [s for h, s in zip(sel, sizes) if classify(h.title) != "skip" and s >= 300]
+        sizes = [
+            est_tokens(doc.text[a.offset : b.offset])
+            for a, b in zip(sel, sel[1:] + [None], strict=False)
+            if b is not None
+        ] + [est_tokens(doc.text[sel[-1].offset : doc.content_end])]
+        real = [s for h, s in zip(sel, sizes, strict=False) if classify(h.title) != "skip" and s >= 300]
         chosen = lv
         if len(real) >= 4 and statistics.median(real) <= 2 * chunk_tokens:
             break
@@ -133,7 +135,7 @@ def build_chunks(doc: Doc, cfg: dict) -> list:
         log.info("Chunking by %s headings (level ≤ %d): %d sections", doc.heading_source, level, len(hs))
         if est_tokens(doc.text[start : hs[0].offset]) >= 400:
             sections.append(["Opening", "front", start, hs[0].offset])
-        for a, b in zip(hs, hs[1:] + [None]):
+        for a, b in zip(hs, hs[1:] + [None], strict=False):
             sections.append([a.title, classify(a.title), a.offset, b.offset if b else end])
     else:
         log.info("No usable chapter structure; using fixed ~%d-token chunks", chunk_tokens)

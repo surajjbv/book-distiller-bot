@@ -162,7 +162,7 @@ def apply_fixes(draft: dict, fixes: list) -> tuple:
                         items[f["index"]] = value
                 else:
                     continue
-        except (json.JSONDecodeError, jsonschema.ValidationError, TypeError):
+        except json.JSONDecodeError, jsonschema.ValidationError, TypeError:
             continue
         applied.append(f)
     return out, applied
@@ -196,7 +196,7 @@ class Synthesizer:
         while est_tokens("\n\n".join(texts)) > self.budget and len(texts) > 1:
             rnd += 1
             groups, cur = [], []
-            for t, lab in zip(texts, labels):
+            for t, lab in zip(texts, labels, strict=False):
                 if cur and est_tokens("\n\n".join(x for x, _ in cur + [(t, lab)])) > self.budget:
                     groups.append(cur)
                     cur = []
@@ -236,7 +236,7 @@ class Synthesizer:
                 lines += [f"Evidence: {e}" for e in g["evidence"]] + [f"Takeaway: {t}" for t in g["takeaways"]]
                 return "\n".join(lines), label
 
-            texts, labels = map(list, zip(*pmap(condense, list(enumerate(groups, 1)), self.parallel)))
+            texts, labels = map(list, zip(*pmap(condense, list(enumerate(groups, 1)), self.parallel), strict=False))
         text = "\n\n".join(texts)
         kept, used = [], 0
         for p in text.split("\n\n"):  # whole paragraphs, within the budget
